@@ -1,0 +1,32 @@
+{
+  "name": "@estore/web",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "latest",
+    "@tanstack/react-query": "latest",
+    "axios": "latest",
+    "clsx": "latest",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-hook-form": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.2",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "autoprefixer": "latest",
+    "postcss": "latest",
+    "tailwindcss": "latest",
+    "typescript": "latest"
+  }
+}

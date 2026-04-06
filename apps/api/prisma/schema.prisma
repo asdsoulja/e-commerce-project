@@ -1,0 +1,131 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  DENIED
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  phone        String?
+  role         UserRole  @default(CUSTOMER)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  addresses    Address[]
+  cart         Cart?
+  orders       Order[]
+}
+
+model Address {
+  id             String  @id @default(cuid())
+  label          String?
+  street         String
+  province       String
+  country        String
+  zip            String
+  phone          String?
+  userId         String
+  user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shippingOrders Order[] @relation("ShippingAddress")
+  billingOrders  Order[] @relation("BillingAddress")
+  createdAt      DateTime @default(now())
+}
+
+model Item {
+  id          String     @id @default(cuid())
+  sku         String     @unique
+  name        String
+  description String
+  category    String
+  brand       String
+  model       String?
+  imageUrl    String?
+  quantity    Int
+  price       Int
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
+}
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String     @unique
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model CartItem {
+  id       String @id @default(cuid())
+  cartId   String
+  itemId   String
+  quantity Int
+  cart     Cart   @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  item     Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, itemId])
+}
+
+model Order {
+  id               String        @id @default(cuid())
+  userId           String
+  status           OrderStatus   @default(PENDING)
+  paymentStatus    PaymentStatus @default(PENDING)
+  total            Int
+  shippingAddressId String?
+  billingAddressId  String?
+  placedAt         DateTime      @default(now())
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shippingAddress  Address?      @relation("ShippingAddress", fields: [shippingAddressId], references: [id], onDelete: SetNull)
+  billingAddress   Address?      @relation("BillingAddress", fields: [billingAddressId], references: [id], onDelete: SetNull)
+  items            OrderItem[]
+}
+
+model OrderItem {
+  id              String @id @default(cuid())
+  orderId         String
+  itemId          String
+  quantity        Int
+  priceAtPurchase Int
+  order           Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  item            Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  sid       String   @unique
+  data      String
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+model PaymentAttempt {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+}

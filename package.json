@@ -1,0 +1,22 @@
+{
+  "name": "eecs4413-estore-project",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "apps/api"
+  ],
+  "scripts": {
+    "dev": "concurrently -n web,api -c cyan,magenta \"npm run dev --workspace @estore/web\" \"npm run dev --workspace @estore/api\"",
+    "dev:web": "npm run dev --workspace @estore/web",
+    "dev:api": "npm run dev --workspace @estore/api",
+    "build": "npm run build --workspace @estore/web && npm run build --workspace @estore/api",
+    "lint": "npm run lint --workspace @estore/web && npm run lint --workspace @estore/api",
+    "typecheck": "npm run typecheck --workspace @estore/web && npm run typecheck --workspace @estore/api",
+    "db:generate": "npm run db:generate --workspace @estore/api",
+    "db:push": "npm run db:push --workspace @estore/api",
+    "db:seed": "npm run db:seed --workspace @estore/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

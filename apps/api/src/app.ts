@@ -2,6 +2,7 @@ import cors from "cors";
 import express from "express";
 import { env } from "./config/env.js";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler.js";
+import { requestLogger } from "./middleware/request-logger.js";
 import { sessionMiddleware } from "./middleware/session.js";
 import { apiRoutes } from "./routes/index.js";
 
@@ -16,6 +17,7 @@ app.use(
 
 app.use(express.json());
 app.use(sessionMiddleware);
+app.use(requestLogger);
 
 app.get("/", (_req, res) => {
   res.json({

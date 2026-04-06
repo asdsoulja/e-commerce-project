@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 :root {
   --page: 42 100% 98%;
@@ -8,6 +6,14 @@
   --border: 35 30% 85%;
   --accent: 14 82% 55%;
   --text: 220 18% 20%;
+}
+
+@theme inline {
+  --color-page: hsl(var(--page));
+  --color-card: hsl(var(--card));
+  --color-border: hsl(var(--border));
+  --color-accent: hsl(var(--accent));
+  --color-text: hsl(var(--text));
 }
 
 * {

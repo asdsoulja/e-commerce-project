@@ -1,334 +1,310 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, toErrorMessage } from "@/lib/api";
 import { formatCurrency } from "@/lib/format";
-import { Item } from "@/lib/types";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+
+type AdminProduct = {
+  id: string;
+  name: string;
+  brand: string;
+  category: string;
+  price: number;
+  quantity: number;
+};
 
 type AdminUser = {
   id: string;
-  email: string;
   firstName: string;
   lastName: string;
-  phone?: string | null;
+  email: string;
   role: string;
 };
 
 type AdminOrder = {
   id: string;
-  total: number;
-  placedAt: string;
-  user: { email: string };
-  items: Array<{
-    quantity: number;
-    priceAtPurchase: number;
-    item: {
-      name: string;
-    };
-  }>;
+  customerEmail: string;
+  createdAt: string;
+  totalAmount: number;
+  paymentStatus: string;
 };
 
 export default function AdminPage() {
   const queryClient = useQueryClient();
-  const [draftQuantities, setDraftQuantities] = useState<Record<string, string>>({});
-  const [customerEmail, setCustomerEmail] = useState("");
-  const [itemName, setItemName] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [newInventoryItem, setNewInventoryItem] = useState({
-    sku: "",
-    name: "",
-    description: "",
-    category: "",
-    brand: "",
-    model: "",
-    imageUrl: "",
-    quantity: "0",
-    price: "0"
+
+  const [filters, setFilters] = useState({
+    customerEmail: "",
+    itemName: "",
+    dateFrom: "",
+    dateTo: "",
   });
 
-  const salesFilters = useMemo(
-    () => ({
-      customerEmail: customerEmail || undefined,
-      itemName: itemName || undefined,
-      dateFrom: dateFrom || undefined,
-      dateTo: dateTo || undefined
-    }),
-    [customerEmail, itemName, dateFrom, dateTo]
-  );
-
   const inventoryQuery = useQuery({
-    queryKey: ["admin", "inventory"],
+    queryKey: ["admin-inventory"],
     queryFn: async () => {
       const { data } = await api.get("/admin/inventory");
-      return data.items as Item[];
-    }
+      return (data.items ?? []) as AdminProduct[];
+    },
   });
 
   const usersQuery = useQuery({
-    queryKey: ["admin", "users"],
+    queryKey: ["admin-users"],
     queryFn: async () => {
       const { data } = await api.get("/admin/users");
-      return data.users as AdminUser[];
-    }
+      return (data.users ?? []) as AdminUser[];
+    },
   });
 
   const salesQuery = useQuery({
-    queryKey: ["admin", "sales", salesFilters],
+    queryKey: ["admin-sales", filters],
     queryFn: async () => {
-      const { data } = await api.get("/admin/sales", {
-        params: salesFilters
-      });
-      return data.orders as AdminOrder[];
-    }
+      const { data } = await api.get("/admin/sales", { params: filters });
+      return (data.orders ?? []) as AdminOrder[];
+    },
   });
 
-  const updateInventoryMutation = useMutation({
-    mutationFn: async (payload: { itemId: string; quantity: number }) => {
-      await api.patch(`/admin/inventory/${payload.itemId}`, { quantity: payload.quantity });
+  const inventoryMutation = useMutation({
+    mutationFn: async ({
+      itemId,
+      quantity,
+    }: {
+      itemId: string;
+      quantity: number;
+    }) => {
+      await api.patch(`/admin/inventory/${itemId}`, { quantity });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "inventory"] });
-    }
-  });
-
-  const createInventoryMutation = useMutation({
-    mutationFn: async () => {
-      await api.post("/admin/inventory", {
-        sku: newInventoryItem.sku,
-        name: newInventoryItem.name,
-        description: newInventoryItem.description,
-        category: newInventoryItem.category,
-        brand: newInventoryItem.brand,
-        model: newInventoryItem.model || undefined,
-        imageUrl: newInventoryItem.imageUrl || undefined,
-        quantity: Number(newInventoryItem.quantity),
-        price: Number(newInventoryItem.price)
-      });
+      queryClient.invalidateQueries({ queryKey: ["admin-inventory"] });
     },
-    onSuccess: () => {
-      setNewInventoryItem({
-        sku: "",
-        name: "",
-        description: "",
-        category: "",
-        brand: "",
-        model: "",
-        imageUrl: "",
-        quantity: "0",
-        price: "0"
-      });
-      queryClient.invalidateQueries({ queryKey: ["admin", "inventory"] });
-    }
   });
-
-  const firstError =
-    inventoryQuery.error ??
-    usersQuery.error ??
-    salesQuery.error ??
-    updateInventoryMutation.error ??
-    createInventoryMutation.error;
 
   return (
-    <section className="grid gap-4">
-      <h2 className="text-xl font-semibold">Administrator Dashboard</h2>
+    <main className="space-y-8">
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+            Administrator
+          </p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+            Store Management Dashboard
+          </h1>
+          <p className="max-w-2xl text-sm leading-6 text-slate-600">
+            Review sales history, maintain inventory, and manage customer
+            accounts.
+          </p>
+        </div>
+      </section>
 
-      {firstError ? (
-        <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          {toErrorMessage(firstError)}
-        </p>
+      {inventoryQuery.error ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {toErrorMessage(inventoryQuery.error)}
+        </div>
       ) : null}
 
-      <article className="rounded-xl border border-border bg-card p-4 shadow-sm">
-        <h3 className="mb-2 text-lg font-semibold">Inventory Management</h3>
-
-        <form
-          className="mb-3 grid gap-2 rounded-md border border-dashed border-border p-3 md:grid-cols-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            createInventoryMutation.mutate();
-          }}
-        >
-          <Input
-            value={newInventoryItem.sku}
-            onChange={(event) =>
-              setNewInventoryItem((current) => ({ ...current, sku: event.target.value }))
-            }
-            placeholder="SKU"
-            required
-          />
-          <Input
-            value={newInventoryItem.name}
-            onChange={(event) =>
-              setNewInventoryItem((current) => ({ ...current, name: event.target.value }))
-            }
-            placeholder="Name"
-            required
-          />
-          <Input
-            value={newInventoryItem.category}
-            onChange={(event) =>
-              setNewInventoryItem((current) => ({ ...current, category: event.target.value }))
-            }
-            placeholder="Category"
-            required
-          />
-          <Input
-            value={newInventoryItem.brand}
-            onChange={(event) =>
-              setNewInventoryItem((current) => ({ ...current, brand: event.target.value }))
-            }
-            placeholder="Brand"
-            required
-          />
-          <Input
-            value={newInventoryItem.model}
-            onChange={(event) =>
-              setNewInventoryItem((current) => ({ ...current, model: event.target.value }))
-            }
-            placeholder="Model"
-          />
-          <Input
-            value={newInventoryItem.imageUrl}
-            onChange={(event) =>
-              setNewInventoryItem((current) => ({ ...current, imageUrl: event.target.value }))
-            }
-            placeholder="Image URL"
-          />
-          <Input
-            value={newInventoryItem.price}
-            onChange={(event) =>
-              setNewInventoryItem((current) => ({ ...current, price: event.target.value }))
-            }
-            placeholder="Price (number)"
-            required
-          />
-          <Input
-            value={newInventoryItem.quantity}
-            onChange={(event) =>
-              setNewInventoryItem((current) => ({ ...current, quantity: event.target.value }))
-            }
-            placeholder="Quantity"
-            required
-          />
-          <Input
-            className="md:col-span-2"
-            value={newInventoryItem.description}
-            onChange={(event) =>
-              setNewInventoryItem((current) => ({ ...current, description: event.target.value }))
-            }
-            placeholder="Description"
-            required
-          />
-          <Button type="submit" disabled={createInventoryMutation.isPending}>
-            {createInventoryMutation.isPending ? "Adding..." : "Add inventory item"}
-          </Button>
-        </form>
-
-        <div className="grid gap-2">
-          {(inventoryQuery.data ?? []).map((item) => (
-            <div key={item.id} className="grid gap-2 rounded-md border border-border p-3 md:grid-cols-[1fr_auto_auto]">
-              <div>
-                <p className="font-semibold">{item.name}</p>
-                <p className="text-sm text-slate-500">
-                  {item.brand} • {formatCurrency(item.price)}
-                </p>
-              </div>
-              <Input
-                className="w-28"
-                value={draftQuantities[item.id] ?? String(item.quantity)}
-                onChange={(e) =>
-                  setDraftQuantities((current) => ({
-                    ...current,
-                    [item.id]: e.target.value
-                  }))
-                }
-              />
-              <Button
-                onClick={() =>
-                  updateInventoryMutation.mutate({
-                    itemId: item.id,
-                    quantity: Number(draftQuantities[item.id] ?? item.quantity)
-                  })
-                }
-              >
-                Update
-              </Button>
-            </div>
-          ))}
+      {usersQuery.error ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {toErrorMessage(usersQuery.error)}
         </div>
-      </article>
+      ) : null}
 
-      <article className="rounded-xl border border-border bg-card p-4 shadow-sm">
-        <h3 className="mb-2 text-lg font-semibold">Sales History</h3>
-        <div className="mb-3 grid gap-2 md:grid-cols-4">
-          <Input
-            value={customerEmail}
-            onChange={(event) => setCustomerEmail(event.target.value)}
-            placeholder="Filter by customer email"
+      {salesQuery.error ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {toErrorMessage(salesQuery.error)}
+        </div>
+      ) : null}
+
+      {inventoryMutation.error ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {toErrorMessage(inventoryMutation.error)}
+        </div>
+      ) : null}
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-2xl font-semibold text-slate-900">Sales History</h2>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <input
+            type="text"
+            placeholder="Customer email"
+            value={filters.customerEmail}
+            onChange={(e) =>
+              setFilters((prev) => ({ ...prev, customerEmail: e.target.value }))
+            }
+            className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-500"
           />
-          <Input
-            value={itemName}
-            onChange={(event) => setItemName(event.target.value)}
-            placeholder="Filter by product name"
+          <input
+            type="text"
+            placeholder="Product name"
+            value={filters.itemName}
+            onChange={(e) =>
+              setFilters((prev) => ({ ...prev, itemName: e.target.value }))
+            }
+            className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-500"
           />
-          <Input
+          <input
             type="date"
-            value={dateFrom}
-            onChange={(event) => setDateFrom(event.target.value)}
-            placeholder="From"
+            value={filters.dateFrom}
+            onChange={(e) =>
+              setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))
+            }
+            className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-500"
           />
-          <Input
+          <input
             type="date"
-            value={dateTo}
-            onChange={(event) => setDateTo(event.target.value)}
-            placeholder="To"
+            value={filters.dateTo}
+            onChange={(e) =>
+              setFilters((prev) => ({ ...prev, dateTo: e.target.value }))
+            }
+            className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-500"
           />
         </div>
-        <div className="grid gap-2">
-          {(salesQuery.data ?? []).length === 0 ? (
-            <p className="rounded-md border border-border p-3 text-sm text-slate-500">
-              No orders found for current filters.
-            </p>
-          ) : null}
-          {(salesQuery.data ?? []).map((order) => (
-            <div key={order.id} className="rounded-md border border-border p-3 text-sm">
-              <p>Order: {order.id}</p>
-              <p>Customer: {order.user.email}</p>
-              <p>Date: {new Date(order.placedAt).toLocaleDateString("en-CA")}</p>
-              <p>Total: {formatCurrency(order.total)}</p>
-              <p>
-                Items:{" "}
-                {order.items
-                  .map(
-                    (entry) =>
-                      `${entry.item.name} x${entry.quantity} (${formatCurrency(entry.priceAtPurchase)})`
-                  )
-                  .join(", ")}
-              </p>
-            </div>
-          ))}
-        </div>
-      </article>
 
-      <article className="rounded-xl border border-border bg-card p-4 shadow-sm">
-        <h3 className="mb-2 text-lg font-semibold">User Accounts</h3>
-        <div className="grid gap-2">
-          {(usersQuery.data ?? []).map((user) => (
-            <div key={user.id} className="rounded-md border border-border p-3 text-sm">
-              <p>
-                {user.firstName} {user.lastName}
-              </p>
-              <p>{user.email}</p>
-              <p>Role: {user.role}</p>
-              <p>Phone: {user.phone ?? "N/A"}</p>
-            </div>
-          ))}
+        <div className="mt-5 overflow-x-auto">
+          <table className="min-w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 text-left text-slate-600">
+                <th className="px-3 py-3 font-semibold">Order ID</th>
+                <th className="px-3 py-3 font-semibold">Customer</th>
+                <th className="px-3 py-3 font-semibold">Date</th>
+                <th className="px-3 py-3 font-semibold">Status</th>
+                <th className="px-3 py-3 font-semibold">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {salesQuery.isLoading ? (
+                <tr>
+                  <td className="px-3 py-4 text-slate-600" colSpan={5}>
+                    Loading sales history...
+                  </td>
+                </tr>
+              ) : salesQuery.data?.length ? (
+                salesQuery.data.map((order) => (
+                  <tr key={order.id} className="border-b border-slate-100">
+                    <td className="px-3 py-4 text-slate-900">{order.id}</td>
+                    <td className="px-3 py-4 text-slate-600">
+                      {order.customerEmail}
+                    </td>
+                    <td className="px-3 py-4 text-slate-600">
+                      {new Date(order.createdAt).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-4 text-slate-600">
+                      {order.paymentStatus}
+                    </td>
+                    <td className="px-3 py-4 font-semibold text-slate-900">
+                      {formatCurrency(order.totalAmount)}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td className="px-3 py-4 text-slate-600" colSpan={5}>
+                    No sales found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-      </article>
-    </section>
+      </section>
+
+      <section className="grid gap-8 xl:grid-cols-2">
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-2xl font-semibold text-slate-900">
+            Inventory Management
+          </h2>
+
+          <div className="mt-5 space-y-4">
+            {inventoryQuery.isLoading ? (
+              <p className="text-sm text-slate-600">Loading inventory...</p>
+            ) : inventoryQuery.data?.length ? (
+              inventoryQuery.data.map((item) => (
+                <article
+                  key={item.id}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-900">
+                        {item.name}
+                      </h3>
+                      <p className="text-sm text-slate-600">
+                        {item.brand} · {item.category}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        Price: {formatCurrency(item.price)}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="number"
+                        defaultValue={item.quantity}
+                        min={0}
+                        onBlur={(e) => {
+                          const nextQuantity = Number(e.target.value);
+                          if (Number.isNaN(nextQuantity) || nextQuantity < 0) return;
+                          inventoryMutation.mutate({
+                            itemId: item.id,
+                            quantity: nextQuantity,
+                          });
+                        }}
+                        className="w-24 rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-slate-500"
+                      />
+                      <span className="text-sm text-slate-600">qty</span>
+                    </div>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <p className="text-sm text-slate-600">No inventory items found.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-2xl font-semibold text-slate-900">
+            User Accounts
+          </h2>
+
+          <div className="mt-5 overflow-x-auto">
+            <table className="min-w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-slate-600">
+                  <th className="px-3 py-3 font-semibold">Name</th>
+                  <th className="px-3 py-3 font-semibold">Email</th>
+                  <th className="px-3 py-3 font-semibold">Role</th>
+                </tr>
+              </thead>
+              <tbody>
+                {usersQuery.isLoading ? (
+                  <tr>
+                    <td className="px-3 py-4 text-slate-600" colSpan={3}>
+                      Loading users...
+                    </td>
+                  </tr>
+                ) : usersQuery.data?.length ? (
+                  usersQuery.data.map((user) => (
+                    <tr key={user.id} className="border-b border-slate-100">
+                      <td className="px-3 py-4 text-slate-900">
+                        {user.firstName} {user.lastName}
+                      </td>
+                      <td className="px-3 py-4 text-slate-600">{user.email}</td>
+                      <td className="px-3 py-4 text-slate-600">{user.role}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td className="px-3 py-4 text-slate-600" colSpan={3}>
+                      No users found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }

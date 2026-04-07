@@ -1,9 +1,10 @@
- "use client";
+"use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { api, toErrorMessage } from "@/lib/api";
+import { formatCurrency } from "@/lib/format";
 
 type CheckoutPayload = {
   shippingAddress: {
@@ -21,7 +22,46 @@ type CheckoutPayload = {
     expiryYear: string;
     cvv: string;
   };
-  useSavedInfo: boolean;
+};
+
+type ApiAddressPayload = {
+  street: string;
+  province: string;
+  country: string;
+  zip: string;
+};
+
+type ApiCheckoutPayload = {
+  billingAddress: ApiAddressPayload;
+  shippingAddress: ApiAddressPayload;
+};
+
+type ApiAddress = {
+  id: string;
+  street: string;
+  province: string;
+  country: string;
+  zip: string;
+  createdAt: string;
+};
+
+type ApiMeResponse = {
+  user?: {
+    firstName?: string;
+    lastName?: string;
+    addresses?: ApiAddress[];
+  };
+};
+
+type ApiCartSummary = {
+  total: number;
+  items: {
+    quantity: number;
+  }[];
+};
+
+type ApiCartSummaryResponse = {
+  cart?: ApiCartSummary;
 };
 
 export default function CheckoutPage() {
@@ -43,29 +83,94 @@ export default function CheckoutPage() {
       expiryYear: "",
       cvv: "",
     },
-    useSavedInfo: true,
   });
 
   const meQuery = useQuery({
     queryKey: ["me"],
     queryFn: async () => {
-      const { data } = await api.get("/identity/me");
-      return data;
-    },
-  });
-
-  const checkoutMutation = useMutation({
-    mutationFn: async () => {
-      const payload = {
-        ...form,
-        useSavedInfo,
-      };
-      const { data } = await api.post("/orders/checkout", payload);
+      const { data } = await api.get<ApiMeResponse>("/identity/me");
       return data;
     },
   });
 
   const isLoggedIn = useMemo(() => Boolean(meQuery.data?.user), [meQuery.data]);
+
+  const cartSummaryQuery = useQuery({
+    queryKey: ["cart", "checkout-summary"],
+    queryFn: async () => {
+      const { data } = await api.get<ApiCartSummaryResponse>("/cart");
+      return data.cart ?? { total: 0, items: [] };
+    },
+    enabled: isLoggedIn,
+  });
+
+  const latestSavedAddress = useMemo(() => {
+    const addresses = meQuery.data?.user?.addresses ?? [];
+
+    if (addresses.length === 0) {
+      return null;
+    }
+
+    return [...addresses].sort((a, b) => {
+      const tsA = Date.parse(a.createdAt);
+      const tsB = Date.parse(b.createdAt);
+      return (Number.isNaN(tsB) ? 0 : tsB) - (Number.isNaN(tsA) ? 0 : tsA);
+    })[0];
+  }, [meQuery.data]);
+
+  const hasSavedAddress = Boolean(latestSavedAddress);
+
+  useEffect(() => {
+    if (!useSavedInfo || !latestSavedAddress) {
+      return;
+    }
+
+    const fullName = [meQuery.data?.user?.firstName, meQuery.data?.user?.lastName]
+      .filter(Boolean)
+      .join(" ");
+
+    setForm((prev) => ({
+      ...prev,
+      shippingAddress: {
+        ...prev.shippingAddress,
+        fullName: prev.shippingAddress.fullName || fullName,
+        street: latestSavedAddress.street,
+        province: latestSavedAddress.province,
+        postalCode: latestSavedAddress.zip,
+        country: latestSavedAddress.country,
+      },
+    }));
+  }, [
+    useSavedInfo,
+    latestSavedAddress,
+    meQuery.data?.user?.firstName,
+    meQuery.data?.user?.lastName,
+  ]);
+
+  const checkoutMutation = useMutation({
+    mutationFn: async () => {
+      const normalizedAddress: ApiAddressPayload = {
+        street: form.shippingAddress.street,
+        province: form.shippingAddress.province,
+        country: form.shippingAddress.country,
+        zip: form.shippingAddress.postalCode,
+      };
+
+      const payload: ApiCheckoutPayload = {
+        shippingAddress: normalizedAddress,
+        billingAddress: normalizedAddress,
+      };
+
+      const { data } = await api.post("/orders/checkout", payload);
+      return data;
+    },
+  });
+
+  const totalAmount = cartSummaryQuery.data?.total ?? 0;
+  const totalItems = (cartSummaryQuery.data?.items ?? []).reduce(
+    (sum, item) => sum + item.quantity,
+    0
+  );
 
   const updateShipping = (
     field: keyof CheckoutPayload["shippingAddress"],
@@ -143,15 +248,15 @@ export default function CheckoutPage() {
             </Link>
           </div>
         </section>
-      ) : (
+      ) : hasSavedAddress ? (
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-semibold text-slate-900">
-                Saved account detected
+                Saved checkout details found
               </h2>
               <p className="mt-1 text-sm text-slate-600">
-                Choose whether to use saved billing and shipping details.
+                Use your most recent saved address to prefill checkout.
               </p>
             </div>
 
@@ -164,6 +269,16 @@ export default function CheckoutPage() {
               Use saved info
             </label>
           </div>
+        </section>
+      ) : (
+        <section className="rounded-3xl border border-slate-200 bg-slate-50 p-6 shadow-sm">
+          <h2 className="text-xl font-semibold text-slate-900">
+            No saved checkout details yet
+          </h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Complete an order and your address will be available for faster
+            checkout next time.
+          </p>
         </section>
       )}
 
@@ -289,7 +404,7 @@ export default function CheckoutPage() {
       ) : null}
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-xl font-semibold text-slate-900">
               Ready to place your order?
@@ -297,6 +412,26 @@ export default function CheckoutPage() {
             <p className="mt-1 text-sm text-slate-600">
               Submit checkout and let the backend validate payment and inventory.
             </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 lg:min-w-[220px]">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Total amount
+            </p>
+            {!isLoggedIn ? (
+              <p className="mt-2 text-sm text-slate-600">Sign in to view total</p>
+            ) : cartSummaryQuery.isLoading ? (
+              <p className="mt-2 text-sm text-slate-600">Loading total...</p>
+            ) : (
+              <>
+                <p className="mt-1 text-3xl font-bold tracking-tight text-slate-900">
+                  {formatCurrency(totalAmount)}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {totalItems} item{totalItems === 1 ? "" : "s"} in cart
+                </p>
+              </>
+            )}
           </div>
 
           <button

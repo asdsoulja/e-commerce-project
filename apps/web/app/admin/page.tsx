@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, toErrorMessage } from "@/lib/api";
 import { formatCurrency } from "@/lib/format";
@@ -30,6 +30,16 @@ type AdminOrder = {
   paymentStatus: string;
 };
 
+type ApiSalesOrder = {
+  id: string;
+  placedAt: string;
+  total: number;
+  paymentStatus: string;
+  user?: {
+    email?: string;
+  } | null;
+};
+
 export default function AdminPage() {
   const queryClient = useQueryClient();
 
@@ -39,6 +49,16 @@ export default function AdminPage() {
     dateFrom: "",
     dateTo: "",
   });
+
+  const salesFilters = useMemo(
+    () => ({
+      customerEmail: filters.customerEmail || undefined,
+      itemName: filters.itemName || undefined,
+      dateFrom: filters.dateFrom || undefined,
+      dateTo: filters.dateTo || undefined,
+    }),
+    [filters]
+  );
 
   const inventoryQuery = useQuery({
     queryKey: ["admin-inventory"],
@@ -57,10 +77,18 @@ export default function AdminPage() {
   });
 
   const salesQuery = useQuery({
-    queryKey: ["admin-sales", filters],
+    queryKey: ["admin-sales", salesFilters],
     queryFn: async () => {
-      const { data } = await api.get("/admin/sales", { params: filters });
-      return (data.orders ?? []) as AdminOrder[];
+      const { data } = await api.get("/admin/sales", { params: salesFilters });
+      const orders = (data.orders ?? []) as ApiSalesOrder[];
+
+      return orders.map((order) => ({
+        id: order.id,
+        customerEmail: order.user?.email ?? "Unknown",
+        createdAt: order.placedAt,
+        totalAmount: order.total,
+        paymentStatus: order.paymentStatus,
+      })) as AdminOrder[];
     },
   });
 
@@ -242,8 +270,9 @@ export default function AdminPage() {
                         defaultValue={item.quantity}
                         min={0}
                         onBlur={(e) => {
-                          const nextQuantity = Number(e.target.value);
-                          if (Number.isNaN(nextQuantity) || nextQuantity < 0) return;
+                          const rawValue = Number(e.target.value);
+                          if (Number.isNaN(rawValue) || rawValue < 0) return;
+                          const nextQuantity = Math.floor(rawValue);
                           inventoryMutation.mutate({
                             itemId: item.id,
                             quantity: nextQuantity,

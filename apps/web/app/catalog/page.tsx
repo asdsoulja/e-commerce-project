@@ -4,11 +4,18 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
+import { isAxiosError } from "axios";
 import { api, toErrorMessage } from "@/lib/api";
 import { formatCurrency } from "@/lib/format";
 import { Item } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+
+type ApiMeRoleResponse = {
+  user?: {
+    role?: "CUSTOMER" | "ADMIN";
+  };
+};
 
 export default function CatalogPage() {
   const queryClient = useQueryClient();
@@ -77,6 +84,23 @@ export default function CatalogPage() {
     },
   });
 
+  const meRoleQuery = useQuery({
+    queryKey: ["me-role"],
+    queryFn: async () => {
+      try {
+        const { data } = await api.get<ApiMeRoleResponse>("/identity/me");
+        return data.user?.role ?? null;
+      } catch (error) {
+        if (isAxiosError(error) && error.response?.status === 401) {
+          return null;
+        }
+
+        return null;
+      }
+    },
+    retry: false,
+  });
+
   const addMutation = useMutation({
     mutationFn: async (itemId: string) => {
       await api.post("/cart/items", { itemId, quantity: 1 });
@@ -139,6 +163,7 @@ export default function CatalogPage() {
 
   const items = catalogQuery.data ?? [];
   const filtersLoading = filterOptionsQuery.isLoading;
+  const isAdmin = meRoleQuery.data === "ADMIN";
 
   return (
     <main className="space-y-8">
@@ -167,8 +192,8 @@ export default function CatalogPage() {
       </section>
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-          <div className="xl:col-span-2">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-12">
+          <div className="xl:col-span-3">
             <label className="mb-2 block text-sm font-medium text-slate-700">
               Search
             </label>
@@ -176,10 +201,11 @@ export default function CatalogPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search items"
+              className="h-10 rounded-2xl border-slate-300 bg-white/95 px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_4px_12px_rgba(15,23,42,0.06)] focus:border-slate-500 focus:ring-slate-300/40"
             />
           </div>
 
-          <div>
+          <div className="xl:col-span-2">
             <label className="mb-2 block text-sm font-medium text-slate-700">
               Category
             </label>
@@ -198,7 +224,7 @@ export default function CatalogPage() {
             </select>
           </div>
 
-          <div>
+          <div className="xl:col-span-2">
             <label className="mb-2 block text-sm font-medium text-slate-700">
               Brand
             </label>
@@ -217,7 +243,7 @@ export default function CatalogPage() {
             </select>
           </div>
 
-          <div>
+          <div className="xl:col-span-2">
             <label className="mb-2 block text-sm font-medium text-slate-700">
               Model
             </label>
@@ -236,15 +262,15 @@ export default function CatalogPage() {
             </select>
           </div>
 
-          <div>
+          <div className="xl:col-span-3">
             <label className="mb-2 block text-sm font-medium text-slate-700">
               Sort
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-2">
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as "name" | "price")}
-                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-slate-500"
+                className="rounded-xl border border-slate-300 bg-white px-3 py-2 pr-8 text-sm text-slate-700 outline-none transition focus:border-slate-500"
               >
                 <option value="name">Name</option>
                 <option value="price">Price</option>
@@ -255,7 +281,7 @@ export default function CatalogPage() {
                 onChange={(e) =>
                   setSortOrder(e.target.value as "asc" | "desc")
                 }
-                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-slate-500"
+                className="rounded-xl border border-slate-300 bg-white px-3 py-2 pr-8 text-sm text-slate-700 outline-none transition focus:border-slate-500"
               >
                 <option value="asc">Ascending</option>
                 <option value="desc">Descending</option>
@@ -296,7 +322,7 @@ export default function CatalogPage() {
           {items.map((item) => (
             <article
               key={item.id}
-              className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+              className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
             >
               <div className="flex h-56 items-center justify-center bg-slate-100">
                 {item.imageUrl ? (
@@ -312,7 +338,7 @@ export default function CatalogPage() {
                 )}
               </div>
 
-              <div className="space-y-4 p-6">
+              <div className="flex h-full flex-col gap-4 p-6">
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
@@ -334,47 +360,60 @@ export default function CatalogPage() {
                     {item.name}
                   </h2>
 
-                  <p className="line-clamp-2 text-sm leading-6 text-slate-600">
+                  <p
+                    className={`text-sm leading-6 text-slate-600 ${
+                      isAdmin ? "line-clamp-2" : "line-clamp-3"
+                    }`}
+                  >
                     {item.description}
                   </p>
                 </div>
 
-                <div className="grid gap-2 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-                  <p>
-                    <span className="font-semibold text-slate-900">Brand:</span>{" "}
-                    {item.brand}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-slate-900">Model:</span>{" "}
-                    {item.model ?? "N/A"}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-slate-900">
-                      Inventory:
-                    </span>{" "}
-                    {item.quantity}
-                  </p>
-                </div>
+                <div className="mt-auto space-y-4">
+                  <div className="grid gap-2 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+                    <p>
+                      <span className="font-semibold text-slate-900">
+                        Brand:
+                      </span>{" "}
+                      {item.brand}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-slate-900">
+                        Model:
+                      </span>{" "}
+                      {item.model ?? "N/A"}
+                    </p>
+                    {isAdmin ? (
+                      <p>
+                        <span className="font-semibold text-slate-900">
+                          Inventory:
+                        </span>{" "}
+                        {item.quantity}
+                      </p>
+                    ) : null}
+                  </div>
 
-                <div className="flex items-center justify-between gap-4">
-                  <p className="text-2xl font-bold text-slate-900">
-                    {formatCurrency(item.price)}
-                  </p>
+                  <div className="space-y-3">
+                    <p className="whitespace-nowrap text-2xl font-bold text-slate-900">
+                      {formatCurrency(item.price)}
+                    </p>
 
-                  <div className="flex gap-2">
-                    <Link
-                      href={`/catalog/${item.id}`}
-                      className="inline-flex items-center justify-center rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                    >
-                      View details
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/catalog/${item.id}`}
+                        className="inline-flex min-w-0 flex-1 whitespace-nowrap items-center justify-center rounded-full border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                      >
+                        View details
+                      </Link>
 
-                    <Button
-                      onClick={() => addMutation.mutate(item.id)}
-                      disabled={addMutation.isPending || item.quantity === 0}
-                    >
-                      {item.quantity === 0 ? "Out of stock" : "Add to cart"}
-                    </Button>
+                      <Button
+                        onClick={() => addMutation.mutate(item.id)}
+                        disabled={addMutation.isPending || item.quantity === 0}
+                        className="min-w-0 flex-1 whitespace-nowrap rounded-full border-slate-900 bg-gradient-to-r from-slate-900 to-slate-700 px-3 text-white shadow-sm transition hover:from-slate-800 hover:to-slate-700 disabled:hover:from-slate-900 disabled:hover:to-slate-700"
+                      >
+                        {item.quantity === 0 ? "Out of stock" : "Add to cart"}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>

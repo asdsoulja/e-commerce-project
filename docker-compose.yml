@@ -1,0 +1,19 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ecommerce-app
+    ports:
+      - "3000:3000"
+      - "4000:4000"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=file:/app/apps/api/dev.db
+    volumes:
+      - ./apps/api:/app/apps/api
+      - ./apps/web:/app/apps/web
+      - /app/node_modules
+      - /app/apps/api/node_modules
+      - /app/apps/web/node_modules
+    restart: unless-stopped

@@ -41,6 +41,12 @@ export async function findItemById(id: string) {
   });
 }
 
+export async function findItemBySku(sku: string) {
+  return prisma.item.findUnique({
+    where: { sku }
+  });
+}
+
 export async function findItemsByIds(ids: string[]) {
   return prisma.item.findMany({
     where: {
@@ -59,6 +65,19 @@ export async function updateInventory(itemId: string, quantity: number) {
   return prisma.item.update({
     where: { id: itemId },
     data: { quantity }
+  });
+}
+
+export async function updateInventoryItem(itemId: string, data: Prisma.ItemUpdateInput) {
+  return prisma.item.update({
+    where: { id: itemId },
+    data
+  });
+}
+
+export async function deleteInventoryItem(itemId: string) {
+  return prisma.item.delete({
+    where: { id: itemId }
   });
 }
 

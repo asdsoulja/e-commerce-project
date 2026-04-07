@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api, toErrorMessage } from "@/lib/api";
 import { formatCurrency } from "@/lib/format";
 import { Item } from "@/lib/types";
@@ -11,6 +12,8 @@ import { Input } from "@/components/ui/input";
 
 export default function CatalogPage() {
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
@@ -18,6 +21,33 @@ export default function CatalogPage() {
   const [model, setModel] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "price">("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+
+  const queryString = searchParams.toString();
+
+  useEffect(() => {
+    if (queryString.length === 0) {
+      return;
+    }
+
+    const params = new URLSearchParams(queryString);
+    const searchFromUrl = params.get("search")?.trim() ?? "";
+    const categoryFromUrl = params.get("category")?.trim() ?? "";
+    const brandFromUrl = params.get("brand")?.trim() ?? "";
+    const modelFromUrl = params.get("model")?.trim() ?? "";
+    const sortByFromUrl = params.get("sortBy");
+    const sortOrderFromUrl = params.get("sortOrder");
+    const nextSortBy: "name" | "price" = sortByFromUrl === "price" ? "price" : "name";
+    const nextSortOrder: "asc" | "desc" = sortOrderFromUrl === "desc" ? "desc" : "asc";
+
+    setSearch(searchFromUrl);
+    setCategory(categoryFromUrl);
+    setBrand(brandFromUrl);
+    setModel(modelFromUrl);
+    setSortBy(nextSortBy);
+    setSortOrder(nextSortOrder);
+
+    router.replace("/catalog", { scroll: false });
+  }, [queryString, router]);
 
   const filters = useMemo(
     () => ({
@@ -30,6 +60,14 @@ export default function CatalogPage() {
     }),
     [search, category, brand, model, sortBy, sortOrder]
   );
+
+  const filterOptionsQuery = useQuery({
+    queryKey: ["catalog-filter-options"],
+    queryFn: async () => {
+      const { data } = await api.get("/catalog/items");
+      return data.items as Item[];
+    },
+  });
 
   const catalogQuery = useQuery({
     queryKey: ["catalog", filters],
@@ -48,7 +86,59 @@ export default function CatalogPage() {
     },
   });
 
+  const allItems = filterOptionsQuery.data ?? [];
+  const categoryOptions = useMemo(
+    () =>
+      [...new Set(allItems.map((item) => item.category))]
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b)),
+    [allItems]
+  );
+
+  const brandOptions = useMemo(
+    () =>
+      [
+        ...new Set(
+          allItems
+            .filter((item) => (category ? item.category === category : true))
+            .map((item) => item.brand)
+        ),
+      ]
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b)),
+    [allItems, category]
+  );
+
+  const modelOptions = useMemo(
+    () =>
+      [
+        ...new Set(
+          allItems
+            .filter((item) => (category ? item.category === category : true))
+            .filter((item) => (brand ? item.brand === brand : true))
+            .map((item) => item.model)
+        ),
+      ]
+        .filter((value): value is string => Boolean(value && value.trim()))
+        .sort((a, b) => a.localeCompare(b)),
+    [allItems, category, brand]
+  );
+
+  useEffect(() => {
+    if (brand && !brandOptions.includes(brand)) {
+      setBrand("");
+      setModel("");
+    }
+  }, [brand, brandOptions]);
+
+  useEffect(() => {
+    if (model && !modelOptions.includes(model)) {
+      setModel("");
+    }
+  }, [model, modelOptions]);
+
   const items = catalogQuery.data ?? [];
+  const filtersLoading = filterOptionsQuery.isLoading;
 
   return (
     <main className="space-y-8">
@@ -93,33 +183,57 @@ export default function CatalogPage() {
             <label className="mb-2 block text-sm font-medium text-slate-700">
               Category
             </label>
-            <Input
+            <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              placeholder="Category"
-            />
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-slate-500 disabled:bg-slate-100"
+              disabled={filtersLoading}
+            >
+              <option value="">All categories</option>
+              {categoryOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">
               Brand
             </label>
-            <Input
+            <select
               value={brand}
               onChange={(e) => setBrand(e.target.value)}
-              placeholder="Brand"
-            />
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-slate-500 disabled:bg-slate-100"
+              disabled={filtersLoading}
+            >
+              <option value="">All brands</option>
+              {brandOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">
               Model
             </label>
-            <Input
+            <select
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              placeholder="Model"
-            />
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-slate-500 disabled:bg-slate-100"
+              disabled={filtersLoading}
+            >
+              <option value="">All models</option>
+              {modelOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -154,6 +268,12 @@ export default function CatalogPage() {
       {catalogQuery.error ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {toErrorMessage(catalogQuery.error)}
+        </div>
+      ) : null}
+
+      {filterOptionsQuery.error ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {toErrorMessage(filterOptionsQuery.error)}
         </div>
       ) : null}
 

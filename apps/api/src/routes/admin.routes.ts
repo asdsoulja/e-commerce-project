@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   createInventory,
+  deleteInventory,
   inventory,
   sales,
   updateInventory,
@@ -30,6 +31,7 @@ router.patch(
   validateBody(inventoryUpdateSchema),
   updateInventory
 );
+router.delete("/inventory/:itemId", validateParams(inventoryParamSchema), deleteInventory);
 router.get("/users", users);
 router.patch(
   "/users/:userId",

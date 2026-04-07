@@ -4,22 +4,22 @@ const featuredCategories = [
   {
     title: "Keyboards",
     description: "Mechanical, wireless, compact, and gaming keyboards.",
-    href: "/catalog?category=Keyboards",
+    href: "/catalog?search=keyboard",
   },
   {
     title: "Mice",
     description: "Precision mice for work, school, and gaming setups.",
-    href: "/catalog?category=Mice",
+    href: "/catalog?search=mouse",
   },
   {
     title: "Headsets",
     description: "Comfortable audio gear for calls, music, and gaming.",
-    href: "/catalog?category=Headsets",
+    href: "/catalog?search=headset",
   },
   {
     title: "Gamepads",
     description: "Controllers and accessories for smoother gameplay.",
-    href: "/catalog?category=Gamepads",
+    href: "/catalog?search=gamepad",
   },
 ];
 
@@ -53,8 +53,7 @@ export default function HomePage() {
           <div className="flex flex-wrap gap-3 pt-2">
             <Link
               href="/catalog"
-                className="rounded-full border border-white/40 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
-
+              className="rounded-full border border-white/40 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
             >
               Start Shopping
             </Link>

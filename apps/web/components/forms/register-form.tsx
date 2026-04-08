@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -21,6 +21,7 @@ type RegisterInput = z.infer<typeof registerSchema>;
 
 export function RegisterForm() {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const {
     register,
@@ -35,7 +36,13 @@ export function RegisterForm() {
       const { data } = await api.post("/identity/register", input);
       return data;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["toolbar-session"] }),
+        queryClient.invalidateQueries({ queryKey: ["me"] }),
+        queryClient.invalidateQueries({ queryKey: ["me-role"] }),
+        queryClient.invalidateQueries({ queryKey: ["cart"] })
+      ]);
       router.push("/catalog");
       router.refresh();
     }

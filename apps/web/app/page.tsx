@@ -37,11 +37,11 @@ export default function HomePage() {
       <section className="rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-900 to-slate-700 px-8 py-12 text-white shadow-sm">
         <div className="max-w-3xl space-y-5">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-200">
-            EECS 4413 Team Project
+            EECS 4413 e-Store Project
           </p>
 
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
-            Computer Accessories e-Store
+            Silly Accessories 
           </h1>
 
           <p className="max-w-2xl text-base leading-7 text-slate-200 sm:text-lg">

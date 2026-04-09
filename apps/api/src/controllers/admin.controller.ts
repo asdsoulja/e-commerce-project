@@ -1,11 +1,12 @@
 import { Request, Response } from "express";
 import {
   addInventoryItem,
-  changeInventory,
+  editInventoryItem,
   editUserAccount,
   getInventory,
   getSalesHistory,
-  getUserAccounts
+  getUserAccounts,
+  removeInventoryItem
 } from "../services/admin.service.js";
 import { AppError } from "../utils/app-error.js";
 
@@ -47,8 +48,13 @@ export async function createInventory(req: Request, res: Response) {
 }
 
 export async function updateInventory(req: Request, res: Response) {
-  const item = await changeInventory(String(req.params.itemId), req.body.quantity);
+  const item = await editInventoryItem(String(req.params.itemId), req.body);
   res.json({ item });
+}
+
+export async function deleteInventory(req: Request, res: Response) {
+  await removeInventoryItem(String(req.params.itemId));
+  res.status(204).send();
 }
 
 export async function users(req: Request, res: Response) {

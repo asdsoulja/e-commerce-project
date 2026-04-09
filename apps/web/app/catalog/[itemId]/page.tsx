@@ -4,10 +4,17 @@ import Link from "next/link";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
+import { isAxiosError } from "axios";
 import { api, toErrorMessage } from "@/lib/api";
 import { formatCurrency } from "@/lib/format";
 import { Item } from "@/lib/types";
 import { Button } from "@/components/ui/button";
+
+type ApiMeRoleResponse = {
+  user?: {
+    role?: "CUSTOMER" | "ADMIN";
+  };
+};
 
 export default function ProductDetailsPage() {
   const params = useParams<{ itemId: string }>();
@@ -31,6 +38,23 @@ export default function ProductDetailsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cart"] });
     },
+  });
+
+  const meRoleQuery = useQuery({
+    queryKey: ["me-role"],
+    queryFn: async () => {
+      try {
+        const { data } = await api.get<ApiMeRoleResponse>("/identity/me");
+        return data.user?.role ?? null;
+      } catch (error) {
+        if (isAxiosError(error) && error.response?.status === 401) {
+          return null;
+        }
+
+        return null;
+      }
+    },
+    retry: false,
   });
 
   if (itemQuery.isLoading) {
@@ -68,7 +92,8 @@ export default function ProductDetailsPage() {
   }
 
   const isOutOfStock = item.quantity === 0;
-  const maxQuantity = Math.max(1, item.quantity);
+  const maxQuantity = Math.max(1, Math.min(item.quantity, 99));
+  const isAdmin = meRoleQuery.data === "ADMIN";
 
   return (
     <main className="space-y-8">
@@ -124,21 +149,24 @@ export default function ProductDetailsPage() {
 
           <div className="grid gap-3 rounded-2xl bg-slate-50 p-5 text-sm text-slate-700">
             <p>
-              <span className="font-semibold text-slate-900">Brand:</span> {item.brand}
+              <span className="font-semibold text-slate-900">Brand:</span>{" "}
+              {item.brand}
             </p>
             <p>
               <span className="font-semibold text-slate-900">Model:</span>{" "}
               {item.model ?? "N/A"}
             </p>
+            {isAdmin ? (
+              <p>
+                <span className="font-semibold text-slate-900">
+                  Inventory remaining:
+                </span>{" "}
+                {item.quantity}
+              </p>
+            ) : null}
             <p>
               <span className="font-semibold text-slate-900">Price:</span>{" "}
               {formatCurrency(item.price)}
-            </p>
-            <p>
-              <span className="font-semibold text-slate-900">
-                Inventory remaining:
-              </span>{" "}
-              {item.quantity}
             </p>
           </div>
 
@@ -153,8 +181,9 @@ export default function ProductDetailsPage() {
                 max={maxQuantity}
                 value={quantity}
                 onChange={(e) => {
-                  const nextValue = Number(e.target.value);
-                  if (Number.isNaN(nextValue)) return;
+                  const rawValue = Number(e.target.value);
+                  if (Number.isNaN(rawValue)) return;
+                  const nextValue = Math.floor(rawValue);
                   setQuantity(Math.min(Math.max(nextValue, 1), maxQuantity));
                 }}
                 className="w-28 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-slate-500"

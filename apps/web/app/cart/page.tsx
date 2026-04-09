@@ -16,11 +16,46 @@ type CartItem = {
   inventoryRemaining?: number;
 };
 
+type ApiCartItem = {
+  itemId: string;
+  name: string;
+  brand: string;
+  price: number;
+  quantity: number;
+  inventory: number;
+  imageUrl?: string | null;
+};
+
+type ApiCartResponse = {
+  cart: {
+    items: ApiCartItem[];
+    total: number;
+  };
+};
+
 type CartResponse = {
   items: CartItem[];
   subtotal: number;
   total: number;
 };
+
+function normalizeCartResponse(data: ApiCartResponse): CartResponse {
+  const cart = data.cart ?? { items: [], total: 0 };
+
+  return {
+    items: cart.items.map((item) => ({
+      itemId: item.itemId,
+      name: item.name,
+      brand: item.brand,
+      price: item.price,
+      quantity: item.quantity,
+      imageUrl: item.imageUrl ?? null,
+      inventoryRemaining: item.inventory,
+    })),
+    subtotal: cart.total,
+    total: cart.total,
+  };
+}
 
 export default function CartPage() {
   const queryClient = useQueryClient();
@@ -28,8 +63,8 @@ export default function CartPage() {
   const cartQuery = useQuery({
     queryKey: ["cart"],
     queryFn: async () => {
-      const { data } = await api.get("/cart");
-      return data as CartResponse;
+      const { data } = await api.get<ApiCartResponse>("/cart");
+      return normalizeCartResponse(data);
     },
   });
 
@@ -176,10 +211,16 @@ export default function CartPage() {
                     <input
                       type="number"
                       min={1}
+                      max={Math.max(1, Math.min(item.inventoryRemaining ?? 99, 99))}
                       value={item.quantity}
                       onChange={(e) => {
-                        const nextValue = Number(e.target.value);
-                        if (Number.isNaN(nextValue) || nextValue < 1) return;
+                        const rawValue = Number(e.target.value);
+                        if (Number.isNaN(rawValue)) return;
+                        const maxAllowed = Math.max(
+                          1,
+                          Math.min(item.inventoryRemaining ?? 99, 99)
+                        );
+                        const nextValue = Math.min(Math.max(Math.floor(rawValue), 1), maxAllowed);
                         updateMutation.mutate({
                           itemId: item.itemId,
                           quantity: nextValue,
@@ -194,7 +235,7 @@ export default function CartPage() {
                       {formatCurrency(item.price * item.quantity)}
                     </p>
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       onClick={() => removeMutation.mutate(item.itemId)}
                       disabled={removeMutation.isPending}
                     >

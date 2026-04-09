@@ -31,13 +31,48 @@ type Order = {
   items: OrderItem[];
 };
 
+type ApiAddress = {
+  street: string;
+  province: string;
+  country: string;
+  zip: string;
+};
+
+type ApiUser = {
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  addresses?: ApiAddress[];
+};
+
+type ApiMeResponse = {
+  user?: ApiUser;
+};
+
+type ApiOrderEntry = {
+  quantity: number;
+  priceAtPurchase: number;
+  item?: {
+    name?: string;
+  } | null;
+};
+
+type ApiHistoryOrder = {
+  id: string;
+  placedAt: string;
+  total: number;
+  paymentStatus: string;
+  items: ApiOrderEntry[];
+};
+
 export default function ProfilePage() {
   const queryClient = useQueryClient();
 
   const meQuery = useQuery({
     queryKey: ["me"],
     queryFn: async () => {
-      const { data } = await api.get("/identity/me");
+      const { data } = await api.get<ApiMeResponse>("/identity/me");
       return data;
     },
   });
@@ -46,7 +81,19 @@ export default function ProfilePage() {
     queryKey: ["orders-history"],
     queryFn: async () => {
       const { data } = await api.get("/orders/history");
-      return (data.orders ?? []) as Order[];
+      const orders = (data.orders ?? []) as ApiHistoryOrder[];
+
+      return orders.map((order) => ({
+        id: order.id,
+        createdAt: order.placedAt,
+        totalAmount: order.total,
+        paymentStatus: order.paymentStatus,
+        items: order.items.map((item) => ({
+          itemName: item.item?.name ?? "Unknown item",
+          quantity: item.quantity,
+          unitPrice: item.priceAtPurchase,
+        })),
+      })) as Order[];
     },
   });
 
@@ -65,17 +112,18 @@ export default function ProfilePage() {
   useEffect(() => {
     const user = meQuery.data?.user;
     if (!user) return;
+    const latestAddress = user.addresses?.[0];
 
     setForm({
       firstName: user.firstName ?? "",
       lastName: user.lastName ?? "",
       email: user.email ?? "",
       phone: user.phone ?? "",
-      street: user.address?.street ?? "",
-      city: user.address?.city ?? "",
-      province: user.address?.province ?? "",
-      postalCode: user.address?.postalCode ?? "",
-      country: user.address?.country ?? "Canada",
+      street: latestAddress?.street ?? "",
+      city: "",
+      province: latestAddress?.province ?? "",
+      postalCode: latestAddress?.zip ?? "",
+      country: latestAddress?.country ?? "Canada",
     });
   }, [meQuery.data]);
 
@@ -84,15 +132,7 @@ export default function ProfilePage() {
       const payload = {
         firstName: form.firstName,
         lastName: form.lastName,
-        email: form.email,
-        phone: form.phone,
-        address: {
-          street: form.street,
-          city: form.city,
-          province: form.province,
-          postalCode: form.postalCode,
-          country: form.country,
-        },
+        phone: form.phone.trim() ? form.phone : null,
       };
 
       const { data } = await api.patch("/identity/me", payload);
@@ -109,6 +149,8 @@ export default function ProfilePage() {
       [field]: value,
     }));
   };
+
+  const orders = ordersQuery.data ?? [];
 
   return (
     <main className="space-y-8">
@@ -177,7 +219,7 @@ export default function ProfilePage() {
                   type="email"
                   placeholder="Email"
                   value={form.email}
-                  onChange={(e) => updateField("email", e.target.value)}
+                  readOnly
                   className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-500"
                 />
                 <input
@@ -193,7 +235,7 @@ export default function ProfilePage() {
                 type="text"
                 placeholder="Street address"
                 value={form.street}
-                onChange={(e) => updateField("street", e.target.value)}
+                readOnly
                 className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-500"
               />
 
@@ -202,14 +244,14 @@ export default function ProfilePage() {
                   type="text"
                   placeholder="City"
                   value={form.city}
-                  onChange={(e) => updateField("city", e.target.value)}
+                  readOnly
                   className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-500"
                 />
                 <input
                   type="text"
                   placeholder="Province"
                   value={form.province}
-                  onChange={(e) => updateField("province", e.target.value)}
+                  readOnly
                   className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-500"
                 />
               </div>
@@ -219,17 +261,22 @@ export default function ProfilePage() {
                   type="text"
                   placeholder="Postal code"
                   value={form.postalCode}
-                  onChange={(e) => updateField("postalCode", e.target.value)}
+                  readOnly
                   className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-500"
                 />
                 <input
                   type="text"
                   placeholder="Country"
                   value={form.country}
-                  onChange={(e) => updateField("country", e.target.value)}
+                  readOnly
                   className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-500"
                 />
               </div>
+
+              <p className="text-xs text-slate-500">
+                Email and address are read-only here and come from your account
+                and latest checkout details.
+              </p>
 
               <div className="pt-2">
                 <button
@@ -256,13 +303,13 @@ export default function ProfilePage() {
             </div>
           ) : ordersQuery.isLoading ? (
             <p className="mt-5 text-sm text-slate-600">Loading purchase history...</p>
-          ) : ordersQuery.data.length === 0 ? (
+          ) : orders.length === 0 ? (
             <p className="mt-5 text-sm text-slate-600">
               No purchases yet.
             </p>
           ) : (
             <div className="mt-5 space-y-4">
-              {ordersQuery.data.map((order) => (
+              {orders.map((order) => (
                 <article
                   key={order.id}
                   className="rounded-2xl border border-slate-200 bg-slate-50 p-4"

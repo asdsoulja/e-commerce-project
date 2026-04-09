@@ -1,6 +1,6 @@
 # e-commerce-project
 
-EECS 4413 e-store starter with:
+EECS 4413 e-store features:
 - clear front-end/back-end separation,
 - MVC + DAO backend layering,
 - customer/admin flows aligned with the course PDF,

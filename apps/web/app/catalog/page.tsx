@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { isAxiosError } from "axios";
@@ -17,7 +17,7 @@ type ApiMeRoleResponse = {
   };
 };
 
-export default function CatalogPage() {
+function CatalogPageContent() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -422,5 +422,21 @@ export default function CatalogPage() {
         </section>
       )}
     </main>
+  );
+}
+
+export default function CatalogPage() {
+  return (
+    <Suspense
+      fallback={
+        <main>
+          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-sm text-slate-600 shadow-sm">
+            Loading catalog...
+          </div>
+        </main>
+      }
+    >
+      <CatalogPageContent />
+    </Suspense>
   );
 }

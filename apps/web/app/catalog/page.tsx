@@ -324,19 +324,25 @@ function CatalogPageContent() {
               key={item.id}
               className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
             >
-              <div className="flex h-56 items-center justify-center bg-slate-100">
-                {item.imageUrl ? (
-                  <img
-                    src={item.imageUrl}
-                    alt={item.name}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="text-sm font-medium text-slate-500">
-                    No image
-                  </div>
-                )}
-              </div>
+              <Link
+                href={`/catalog/${item.id}`}
+                aria-label={`View details for ${item.name}`}
+                className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+              >
+                <div className="flex h-56 items-center justify-center bg-slate-100">
+                  {item.imageUrl ? (
+                    <img
+                      src={item.imageUrl}
+                      alt={item.name}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="text-sm font-medium text-slate-500">
+                      No image
+                    </div>
+                  )}
+                </div>
+              </Link>
 
               <div className="flex h-full flex-col gap-4 p-6">
                 <div className="space-y-2">

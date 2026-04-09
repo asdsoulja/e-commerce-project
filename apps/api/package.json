@@ -15,8 +15,7 @@
     "db:studio": "prisma studio --schema prisma/schema.prisma"
   },
   "dependencies": {
-    "@prisma/client": "^6.16.0",
-    "@quixo3/prisma-session-store": "latest",
+    "@prisma/client": "6.19.3",
     "bcrypt": "latest",
     "cors": "latest",
     "dotenv": "latest",
@@ -30,7 +29,7 @@
     "@types/express": "latest",
     "@types/express-session": "latest",
     "@types/node": "latest",
-    "prisma": "^6.16.0",
+    "prisma": "6.19.3",
     "tsx": "latest",
     "typescript": "latest"
   }

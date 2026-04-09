@@ -1,7 +1,7 @@
 import session from "express-session";
-import { PrismaSessionStore } from "@quixo3/prisma-session-store";
 import { env } from "../config/env.js";
 import { prisma } from "../lib/prisma.js";
+import { PrismaSessionStore } from "../lib/prisma-session-store.js";
 
 export const sessionMiddleware = session({
   secret: env.SESSION_SECRET,
@@ -14,7 +14,6 @@ export const sessionMiddleware = session({
     sameSite: "lax"
   },
   store: new PrismaSessionStore(prisma, {
-    checkPeriod: 1000 * 60 * 2,
-    dbRecordIdIsSessionId: false
+    checkPeriodMs: 1000 * 60 * 2
   })
 });

@@ -64,6 +64,60 @@ Starts:
 1. Web app: `http://localhost:3000`
 2. API: `http://localhost:4000`
 
+## Run With Docker (Development)
+1. Create root env file for compose variable substitution:
+```bash
+cp .env.example .env
+```
+2. Build and run:
+```bash
+docker compose up --build
+```
+3. Open:
+   - Web: `http://localhost:3000`
+   - API health: `http://localhost:4000/api/health`
+
+## Run With Docker (Production Profile)
+From repo root:
+
+```bash
+cp .env.example .env
+docker compose -f docker-compose.prod.yml up --build -d
+```
+
+Check status/logs:
+
+```bash
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs -f
+```
+
+Stop:
+
+```bash
+docker compose -f docker-compose.prod.yml down
+```
+
+## Where To Set Secrets and Env Values
+Local docker compose:
+1. Put values in root `.env` (copied from `.env.example`).
+2. Compose injects them into the container via `environment`.
+
+Direct `docker run`:
+1. Pass them with `-e`, for example:
+```bash
+docker run -p 3000:3000 -p 4000:4000 \
+  -e SESSION_SECRET='replace-this' \
+  -e CLIENT_URL='http://localhost:3000' \
+  -e NEXT_PUBLIC_API_URL='http://localhost:4000/api' \
+  your-image
+```
+
+## Database In Docker
+1. Database is SQLite by default.
+2. It is stored in Docker volume `sqlite_data` at `/data` inside the container.
+3. On startup, `start.sh` runs Prisma generate + migrate deploy, then optionally seeds (`RUN_DB_SEED=auto` by default in prod, `RUN_DB_SEED_DEV=auto` in dev).
+
 ## Prisma Commands (Inside `apps/api`)
 ```bash
 cd apps/api

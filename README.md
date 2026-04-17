@@ -11,8 +11,8 @@ Detailed checklist: `docs/spec-alignment.md`.
 
 Current state:
 - core architecture requirements: implemented,
-- core shopping/admin flows: mostly implemented,
-- important remaining gaps (persisted default billing/shipping payment profile, expanded admin account editing UI): tracked in checklist.
+- core shopping/admin flows: implemented,
+- backend test artifacts (browser + curl + postman/newman): implemented.
 
 ## Prerequisites
 1. Node.js 22 LTS (recommended)
@@ -142,6 +142,19 @@ From repo root:
 npm run typecheck
 npm run build
 ```
+
+## Backend Test Artifacts (PDF Requirement)
+From repo root:
+
+```bash
+npm run test:api
+npm run test:api:curl
+npm run test:api:postman
+npm run test:api:browser
+```
+
+Detailed test artifact guide:
+- `docs/backend-testing.md`
 
 ## Seed Login Accounts
 1. Admin: `admin@estore.local` / `Admin123!`

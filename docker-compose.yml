@@ -3,17 +3,26 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ecommerce-app
+      target: development
+    container_name: ecommerce-app-dev
     ports:
       - "3000:3000"
       - "4000:4000"
     environment:
       - NODE_ENV=development
       - DATABASE_URL=file:/app/apps/api/dev.db
+      - CHOKIDAR_USEPOLLING=true
     volumes:
       - ./apps/api:/app/apps/api
       - ./apps/web:/app/apps/web
-      - /app/node_modules
-      - /app/apps/api/node_modules
-      - /app/apps/web/node_modules
+      - api_node_modules:/app/apps/api/node_modules
+      - web_node_modules:/app/apps/web/node_modules
+      - root_node_modules:/app/node_modules
+      - sqlite_data:/app/apps/api  # Persist SQLite database
     restart: unless-stopped
+
+volumes:
+  api_node_modules:
+  web_node_modules:
+  root_node_modules:
+  sqlite_data:

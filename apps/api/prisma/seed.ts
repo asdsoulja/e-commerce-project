@@ -1,5 +1,11 @@
 import bcrypt from "bcrypt";
-import { PrismaClient, UserRole } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
+
+// Import enums separately
+const UserRole = {
+  CUSTOMER: "CUSTOMER",
+  ADMIN: "ADMIN"
+} as const;
 
 const prisma = new PrismaClient();
 
@@ -12,14 +18,14 @@ async function main() {
     update: {
       firstName: "Store",
       lastName: "Admin",
-      role: UserRole.ADMIN,
+      role: "ADMIN",
       passwordHash: adminHash
     },
     create: {
       email: "admin@estore.local",
       firstName: "Store",
       lastName: "Admin",
-      role: UserRole.ADMIN,
+      role: "ADMIN",
       passwordHash: adminHash
     }
   });
@@ -29,14 +35,14 @@ async function main() {
     update: {
       firstName: "Sample",
       lastName: "Customer",
-      role: UserRole.CUSTOMER,
+      role: "CUSTOMER",
       passwordHash: customerHash
     },
     create: {
       email: "customer@estore.local",
       firstName: "Sample",
       lastName: "Customer",
-      role: UserRole.CUSTOMER,
+      role: "CUSTOMER",
       passwordHash: customerHash
     }
   });
@@ -140,6 +146,8 @@ async function main() {
       create: item
     });
   }
+  
+  console.log("✅ Seed completed successfully!");
 }
 
 main()

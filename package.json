@@ -17,6 +17,6 @@
     "db:seed": "npm run db:seed --workspace @estore/api"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.2.1"
   }
 }

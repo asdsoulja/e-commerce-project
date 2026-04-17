@@ -91,7 +91,7 @@ async function main() {
       model: "Ultimate",
       quantity: 28,
       price: 89,
-      imageUrl: "https://images.unsplash.com/photo-1592840062661-4fca2a5f7f7a"
+      imageUrl: "https://e-catalog.com/jpg_zoom1/2746378.jpg"
     },
     {
       sku: "acc-hs-001",
@@ -102,7 +102,7 @@ async function main() {
       model: "Cloud II",
       quantity: 24,
       price: 119,
-      imageUrl: "https://images.unsplash.com/photo-1583394838336-acd977736f90"
+      imageUrl: "https://m.media-amazon.com/images/I/71ltsViEA8L.jpg"
     },
     {
       sku: "acc-mou-002",
@@ -113,7 +113,7 @@ async function main() {
       model: "MX Anywhere 3S",
       quantity: 18,
       price: 99,
-      imageUrl: "https://images.unsplash.com/photo-1586349906319-48d6e9f4e0ef"
+      imageUrl: "https://www.logitech.com/content/dam/logitech/en/products/mice/mx-anywhere-3s/product-gallery/graphite/mx-anywhere-3s-mouse-top-view-graphite.png"
     },
     {
       sku: "acc-key-002",
@@ -135,7 +135,7 @@ async function main() {
       model: "PowerLine III",
       quantity: 120,
       price: 19,
-      imageUrl: "https://images.unsplash.com/photo-1580894908361-967195033215"
+      imageUrl: "https://cdn.shopify.com/s/files/1/0493/7636/2660/files/A88E2011_Richimage_nocopy_2000x2000px_29105b88-b02b-4db3-8bc7-a1922c1dc75f.png?v=1763517239"
     }
   ];
 

@@ -6,6 +6,7 @@ type CreateUserInput = {
   firstName: string;
   lastName: string;
   passwordHash: string;
+  phone?: string;
   role?: UserRole;
 };
 
@@ -19,7 +20,11 @@ export async function findUserById(id: string) {
   return prisma.user.findUnique({
     where: { id },
     include: {
-      addresses: true
+      addresses: {
+        orderBy: {
+          createdAt: "desc"
+        }
+      }
     }
   });
 }
@@ -31,6 +36,7 @@ export async function createUser(input: CreateUserInput) {
       firstName: input.firstName,
       lastName: input.lastName,
       passwordHash: input.passwordHash,
+      phone: input.phone,
       role: input.role ?? UserRole.CUSTOMER,
       cart: {
         create: {}
@@ -46,8 +52,7 @@ export async function listUsers() {
       addresses: {
         orderBy: {
           createdAt: "desc"
-        },
-        take: 1
+        }
       },
       orders: true
     }
@@ -62,9 +67,9 @@ export async function updateUser(id: string, data: Prisma.UserUpdateInput) {
       addresses: {
         orderBy: {
           createdAt: "desc"
-        },
-        take: 1
-      }
+        }
+      },
+      orders: true
     }
   });
 }

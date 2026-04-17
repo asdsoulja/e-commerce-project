@@ -61,7 +61,9 @@ export async function listAllOrders(filter?: SalesHistoryFilter) {
         include: {
           item: true
         }
-      }
+      },
+      shippingAddress: true,
+      billingAddress: true
     }
   });
 }

@@ -1,3 +1,9 @@
+import { Prisma } from "@prisma/client";
+import {
+  DEFAULT_BILLING_LABEL,
+  DEFAULT_SHIPPING_LABEL,
+  upsertAddressByLabel
+} from "../dao/address.dao.js";
 import {
   createInventoryItem,
   deleteInventoryItem,
@@ -7,8 +13,92 @@ import {
   updateInventoryItem
 } from "../dao/item.dao.js";
 import { listAllOrders, SalesHistoryFilter } from "../dao/order.dao.js";
-import { listUsers, updateUser } from "../dao/user.dao.js";
+import { findUserById, listUsers, updateUser } from "../dao/user.dao.js";
 import { AppError } from "../utils/app-error.js";
+
+type AddressPayload = {
+  street: string;
+  province: string;
+  country: string;
+  zip: string;
+  phone?: string;
+};
+
+type CreditCardPayload = {
+  cardHolder: string;
+  cardNumber: string;
+  expiryMonth: string;
+  expiryYear: string;
+  cvv: string;
+};
+
+function normalizeCardNumber(cardNumber: string) {
+  return cardNumber.replace(/\D/g, "");
+}
+
+function toCardDefaults(creditCard: CreditCardPayload) {
+  const normalizedCardNumber = normalizeCardNumber(creditCard.cardNumber);
+  if (normalizedCardNumber.length < 12) {
+    throw new AppError(400, "Card number appears invalid");
+  }
+
+  return {
+    defaultCardHolder: creditCard.cardHolder.trim(),
+    defaultCardLast4: normalizedCardNumber.slice(-4),
+    defaultCardExpiryMonth: creditCard.expiryMonth.trim(),
+    defaultCardExpiryYear: creditCard.expiryYear.trim()
+  };
+}
+
+function sanitizeAddress(address: AddressPayload) {
+  return {
+    street: address.street.trim(),
+    province: address.province.trim(),
+    country: address.country.trim(),
+    zip: address.zip.trim(),
+    phone: address.phone?.trim() || undefined
+  };
+}
+
+function mapDefaultAddress(
+  addresses: Array<{
+    label: string | null;
+    street: string;
+    province: string;
+    country: string;
+    zip: string;
+    phone: string | null;
+  }>,
+  label: string
+) {
+  const address = addresses.find((entry) => entry.label === label);
+  if (!address) {
+    return null;
+  }
+
+  return {
+    street: address.street,
+    province: address.province,
+    country: address.country,
+    zip: address.zip,
+    phone: address.phone
+  };
+}
+
+function formatUserAccount(
+  user: Awaited<ReturnType<typeof listUsers>>[number]
+) {
+  return {
+    ...user,
+    defaultShippingAddress: mapDefaultAddress(user.addresses, DEFAULT_SHIPPING_LABEL),
+    defaultBillingAddress: mapDefaultAddress(user.addresses, DEFAULT_BILLING_LABEL),
+    paymentProfile: user.defaultCardLast4
+      ? {
+          cardLast4: user.defaultCardLast4
+        }
+      : null
+  };
+}
 
 export async function getSalesHistory(filter?: SalesHistoryFilter) {
   return listAllOrders(filter);
@@ -125,16 +215,66 @@ export async function removeInventoryItem(itemId: string) {
 }
 
 export async function getUserAccounts() {
-  return listUsers();
+  const users = await listUsers();
+  return users.map(formatUserAccount);
 }
 
 export async function editUserAccount(
   userId: string,
-  patch: { firstName?: string; lastName?: string; phone?: string | null }
+  patch: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string | null;
+    shippingAddress?: AddressPayload;
+    billingAddress?: AddressPayload;
+    creditCard?: CreditCardPayload;
+  }
 ) {
-  return updateUser(userId, {
-    firstName: patch.firstName,
-    lastName: patch.lastName,
-    phone: patch.phone
-  });
+  const userPatch: Prisma.UserUpdateInput = {};
+
+  if (patch.firstName !== undefined) {
+    userPatch.firstName = patch.firstName.trim();
+  }
+  if (patch.lastName !== undefined) {
+    userPatch.lastName = patch.lastName.trim();
+  }
+  if (patch.phone !== undefined) {
+    userPatch.phone = patch.phone?.trim() || null;
+  }
+  if (patch.creditCard) {
+    Object.assign(userPatch, toCardDefaults(patch.creditCard));
+  }
+
+  if (Object.keys(userPatch).length > 0) {
+    await updateUser(userId, userPatch);
+  }
+
+  await Promise.all([
+    patch.shippingAddress
+      ? upsertAddressByLabel({
+          userId,
+          label: DEFAULT_SHIPPING_LABEL,
+          ...sanitizeAddress(patch.shippingAddress)
+        })
+      : Promise.resolve(),
+    patch.billingAddress
+      ? upsertAddressByLabel({
+          userId,
+          label: DEFAULT_BILLING_LABEL,
+          ...sanitizeAddress(patch.billingAddress)
+        })
+      : Promise.resolve()
+  ]);
+
+  const user = await findUserById(userId);
+  if (!user) {
+    throw new AppError(404, "User not found");
+  }
+
+  const withOrders = {
+    ...user,
+    orders: []
+  };
+
+  return formatUserAccount(withOrders);
 }

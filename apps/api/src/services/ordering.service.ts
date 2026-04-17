@@ -1,4 +1,8 @@
 import { getCartWithItems } from "../dao/cart.dao.js";
+import {
+  DEFAULT_BILLING_LABEL,
+  DEFAULT_SHIPPING_LABEL
+} from "../dao/address.dao.js";
 import { listOrdersByUser } from "../dao/order.dao.js";
 import { prisma } from "../lib/prisma.js";
 import { AppError } from "../utils/app-error.js";
@@ -12,10 +16,91 @@ type AddressPayload = {
   phone?: string;
 };
 
+type CreditCardPayload = {
+  cardHolder: string;
+  cardNumber?: string;
+  expiryMonth: string;
+  expiryYear: string;
+  cvv: string;
+};
+
 type CheckoutPayload = {
   billingAddress: AddressPayload;
   shippingAddress: AddressPayload;
+  creditCard: CreditCardPayload;
+  useSavedPayment?: boolean;
+  saveAsDefault?: boolean;
 };
+
+function sanitizeAddress(address: AddressPayload) {
+  return {
+    street: address.street.trim(),
+    province: address.province.trim(),
+    country: address.country.trim(),
+    zip: address.zip.trim(),
+    phone: address.phone?.trim() || undefined
+  };
+}
+
+function normalizeCardNumber(cardNumber: string) {
+  return cardNumber.replace(/\D/g, "");
+}
+
+function toCardDefaults(creditCard: CreditCardPayload) {
+  const normalizedCardNumber = normalizeCardNumber(creditCard.cardNumber ?? "");
+  if (normalizedCardNumber.length < 12) {
+    throw new AppError(400, "Card number appears invalid");
+  }
+
+  return {
+    defaultCardHolder: creditCard.cardHolder.trim(),
+    defaultCardLast4: normalizedCardNumber.slice(-4),
+    defaultCardExpiryMonth: creditCard.expiryMonth.trim(),
+    defaultCardExpiryYear: creditCard.expiryYear.trim()
+  };
+}
+
+async function resolveCardDefaultsForCheckout(
+  userId: string,
+  payload: CheckoutPayload
+) {
+  const normalizedCardNumber = normalizeCardNumber(payload.creditCard.cardNumber ?? "");
+  if (normalizedCardNumber.length >= 12) {
+    return toCardDefaults(payload.creditCard);
+  }
+
+  if (payload.useSavedPayment) {
+    const user = await prisma.user.findUnique({
+      where: {
+        id: userId
+      },
+      select: {
+        defaultCardHolder: true,
+        defaultCardLast4: true,
+        defaultCardExpiryMonth: true,
+        defaultCardExpiryYear: true
+      }
+    });
+
+    if (
+      !user?.defaultCardHolder ||
+      !user.defaultCardLast4 ||
+      !user.defaultCardExpiryMonth ||
+      !user.defaultCardExpiryYear
+    ) {
+      throw new AppError(400, "No saved payment profile found. Enter a card number.");
+    }
+
+    return {
+      defaultCardHolder: user.defaultCardHolder,
+      defaultCardLast4: user.defaultCardLast4,
+      defaultCardExpiryMonth: user.defaultCardExpiryMonth,
+      defaultCardExpiryYear: user.defaultCardExpiryYear
+    };
+  }
+
+  throw new AppError(400, "Card number appears invalid");
+}
 
 export async function checkout(userId: string, payload: CheckoutPayload) {
   const cart = await getCartWithItems(userId);
@@ -43,11 +128,16 @@ export async function checkout(userId: string, payload: CheckoutPayload) {
     };
   }
 
+  const shippingInput = sanitizeAddress(payload.shippingAddress);
+  const billingInput = sanitizeAddress(payload.billingAddress);
+  const cardDefaults = await resolveCardDefaultsForCheckout(userId, payload);
+  const shouldSaveDefaults = payload.saveAsDefault ?? true;
+
   const result = await prisma.$transaction(async (tx) => {
     const shippingAddress = await tx.address.create({
       data: {
         userId,
-        ...payload.shippingAddress,
+        ...shippingInput,
         label: payload.shippingAddress.label ?? "shipping"
       }
     });
@@ -55,7 +145,7 @@ export async function checkout(userId: string, payload: CheckoutPayload) {
     const billingAddress = await tx.address.create({
       data: {
         userId,
-        ...payload.billingAddress,
+        ...billingInput,
         label: payload.billingAddress.label ?? "billing"
       }
     });
@@ -99,6 +189,69 @@ export async function checkout(userId: string, payload: CheckoutPayload) {
         billingAddress: true
       }
     });
+
+    if (shouldSaveDefaults) {
+      const existingShippingDefault = await tx.address.findFirst({
+        where: {
+          userId,
+          label: DEFAULT_SHIPPING_LABEL
+        },
+        orderBy: {
+          createdAt: "desc"
+        }
+      });
+
+      if (existingShippingDefault) {
+        await tx.address.update({
+          where: {
+            id: existingShippingDefault.id
+          },
+          data: shippingInput
+        });
+      } else {
+        await tx.address.create({
+          data: {
+            userId,
+            label: DEFAULT_SHIPPING_LABEL,
+            ...shippingInput
+          }
+        });
+      }
+
+      const existingBillingDefault = await tx.address.findFirst({
+        where: {
+          userId,
+          label: DEFAULT_BILLING_LABEL
+        },
+        orderBy: {
+          createdAt: "desc"
+        }
+      });
+
+      if (existingBillingDefault) {
+        await tx.address.update({
+          where: {
+            id: existingBillingDefault.id
+          },
+          data: billingInput
+        });
+      } else {
+        await tx.address.create({
+          data: {
+            userId,
+            label: DEFAULT_BILLING_LABEL,
+            ...billingInput
+          }
+        });
+      }
+
+      await tx.user.update({
+        where: {
+          id: userId
+        },
+        data: cardDefaults
+      });
+    }
 
     await tx.cartItem.deleteMany({
       where: {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { isAxiosError } from "axios";
@@ -17,7 +17,7 @@ type ApiMeRoleResponse = {
   };
 };
 
-export default function CatalogPage() {
+function CatalogPageContent() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -324,19 +324,25 @@ export default function CatalogPage() {
               key={item.id}
               className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
             >
-              <div className="flex h-56 items-center justify-center bg-slate-100">
-                {item.imageUrl ? (
-                  <img
-                    src={item.imageUrl}
-                    alt={item.name}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="text-sm font-medium text-slate-500">
-                    No image
-                  </div>
-                )}
-              </div>
+              <Link
+                href={`/catalog/${item.id}`}
+                aria-label={`View details for ${item.name}`}
+                className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+              >
+                <div className="flex h-56 items-center justify-center bg-slate-100">
+                  {item.imageUrl ? (
+                    <img
+                      src={item.imageUrl}
+                      alt={item.name}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="text-sm font-medium text-slate-500">
+                      No image
+                    </div>
+                  )}
+                </div>
+              </Link>
 
               <div className="flex h-full flex-col gap-4 p-6">
                 <div className="space-y-2">
@@ -422,5 +428,21 @@ export default function CatalogPage() {
         </section>
       )}
     </main>
+  );
+}
+
+export default function CatalogPage() {
+  return (
+    <Suspense
+      fallback={
+        <main>
+          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-sm text-slate-600 shadow-sm">
+            Loading catalog...
+          </div>
+        </main>
+      }
+    >
+      <CatalogPageContent />
+    </Suspense>
   );
 }

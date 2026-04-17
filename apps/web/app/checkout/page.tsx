@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, toErrorMessage } from "@/lib/api";
 import { formatCurrency } from "@/lib/format";
 
@@ -64,7 +64,13 @@ type ApiCartSummaryResponse = {
   cart?: ApiCartSummary;
 };
 
+type ApiCheckoutResponse = {
+  approved: boolean;
+  message: string;
+};
+
 export default function CheckoutPage() {
+  const queryClient = useQueryClient();
   const [useSavedInfo, setUseSavedInfo] = useState(true);
 
   const [form, setForm] = useState<CheckoutPayload>({
@@ -161,8 +167,30 @@ export default function CheckoutPage() {
         billingAddress: normalizedAddress,
       };
 
-      const { data } = await api.post("/orders/checkout", payload);
+      const { data } = await api.post<ApiCheckoutResponse>("/orders/checkout", payload);
       return data;
+    },
+    onSuccess: async (data) => {
+      if (!data.approved) {
+        return;
+      }
+
+      queryClient.setQueryData(["cart"], {
+        items: [],
+        subtotal: 0,
+        total: 0,
+      });
+      queryClient.setQueryData(["cart", "toolbar-count"], 0);
+      queryClient.setQueryData(["cart", "checkout-summary"], {
+        items: [],
+        total: 0,
+      });
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["cart"] }),
+        queryClient.invalidateQueries({ queryKey: ["orders-history"] }),
+        queryClient.invalidateQueries({ queryKey: ["me"] }),
+      ]);
     },
   });
 
@@ -397,9 +425,15 @@ export default function CheckoutPage() {
         </div>
       ) : null}
 
-      {checkoutMutation.isSuccess ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-          Order submitted successfully.
+      {checkoutMutation.data ? (
+        <div
+          className={
+            checkoutMutation.data.approved
+              ? "rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
+              : "rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          }
+        >
+          {checkoutMutation.data.message}
         </div>
       ) : null}
 

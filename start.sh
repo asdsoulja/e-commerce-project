@@ -22,4 +22,4 @@ npx prisma db seed || echo "Seeding skipped or already done"
 cd /app
 
 echo "🚀 Starting application..."
-exec concurrently "npm run start:api --prefix apps/api" "npm run start:web --prefix apps/web"
+exec npx concurrently "npm run start:api --prefix apps/api" "npm run start:web --prefix apps/web"

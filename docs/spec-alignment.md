@@ -31,7 +31,7 @@ Status key:
 - `Met` Profile page shows purchase history.
 - `Partial` Profile maintenance: name/phone updates are implemented, but default billing/shipping and card profile editing are not fully implemented.
 - `Partial` Checkout prompts for credit card + shipping/billing fields, but card data is not persisted as a reusable customer profile.
-- `Missing` Full guest checkout path where users can keep shopping cart unauthenticated, then login/register directly in checkout while retaining selected items.
+- `Met` Guest cart + checkout authentication path: users can keep cart unauthenticated, then login/register directly in checkout and retain selected items.
 
 ## Administrator Flows
 - `Met` View sales history.
@@ -48,7 +48,6 @@ Status key:
 - `Met` Catalog and admin flows support adding/filtering accessories by model/brand/category.
 
 ## Recommended Next Steps
-1. Implement guest cart + checkout login/register merge flow.
-2. Add persisted customer billing/shipping defaults and editable payment profile (dummy-safe storage).
-3. Add admin user edit controls in web UI.
-4. Add backend API test collection (Postman/curl scripts) for rubric evidence.
+1. Add persisted customer billing/shipping defaults and editable payment profile (dummy-safe storage).
+2. Add admin user edit controls in web UI.
+3. Add backend API test collection (Postman/curl scripts) for rubric evidence.

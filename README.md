@@ -12,7 +12,7 @@ Detailed checklist: `docs/spec-alignment.md`.
 Current state:
 - core architecture requirements: implemented,
 - core shopping/admin flows: mostly implemented,
-- important remaining gaps (guest checkout account flow, persisted default billing/shipping payment profile): tracked in checklist.
+- important remaining gaps (persisted default billing/shipping payment profile, expanded admin account editing UI): tracked in checklist.
 
 ## Prerequisites
 1. Node.js 22 LTS (recommended)

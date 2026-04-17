@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { mergeGuestCartIntoUserCart } from "../services/cart.service.js";
 import {
   getCurrentUser,
   loginUser,
@@ -9,26 +10,30 @@ import { AppError } from "../utils/app-error.js";
 
 export async function register(req: Request, res: Response) {
   const user = await registerUser(req.body);
+  const cart = await mergeGuestCartIntoUserCart(user.id, req.session.guestCart);
 
   req.session.user = {
     id: user.id,
     email: user.email,
     role: user.role
   };
+  delete req.session.guestCart;
 
-  res.status(201).json({ user });
+  res.status(201).json({ user, cart });
 }
 
 export async function login(req: Request, res: Response) {
   const user = await loginUser(req.body);
+  const cart = await mergeGuestCartIntoUserCart(user.id, req.session.guestCart);
 
   req.session.user = {
     id: user.id,
     email: user.email,
     role: user.role
   };
+  delete req.session.guestCart;
 
-  res.json({ user });
+  res.json({ user, cart });
 }
 
 export async function logout(req: Request, res: Response) {

@@ -8,5 +8,9 @@ declare module "express-session" {
       email: string;
       role: UserRole;
     };
+    guestCart?: Array<{
+      itemId: string;
+      quantity: number;
+    }>;
   }
 }

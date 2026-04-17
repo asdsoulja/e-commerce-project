@@ -99,7 +99,7 @@ export function AppToolbar() {
         throw error;
       }
     },
-    enabled: isLoggedIn,
+    enabled: true,
     retry: false,
   });
 
@@ -152,7 +152,7 @@ export function AppToolbar() {
                   ) : (
                     <span>{link.label}</span>
                   )}
-                  {isCartLink && isLoggedIn ? (
+                  {isCartLink ? (
                     <span className="inline-flex min-w-6 items-center justify-center rounded-full border border-white/40 bg-white/20 px-2 py-0.5 text-xs font-bold leading-none text-white">
                       {cartCountQuery.data ?? 0}
                     </span>

@@ -4,18 +4,24 @@ services:
       context: .
       dockerfile: Dockerfile
       target: production
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api}
     container_name: ecommerce-app-prod
     ports:
-      - "3000:3000"
-      - "4000:4000"
+      - "${WEB_PORT:-3000}:3000"
+      - "${API_PORT:-4000}:4000"
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=file:/app/apps/api/prod.db
+      - DATABASE_URL=file:/data/prod.db
+      - SESSION_SECRET=${SESSION_SECRET:-change-me-in-production-please}
+      - CLIENT_URL=${CLIENT_URL:-http://localhost:3000}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:4000/api}
+      - RUN_DB_SEED=${RUN_DB_SEED:-auto}
     volumes:
-      - sqlite_data:/app/apps/api  # Persist SQLite database
+      - sqlite_data:/data # Persist SQLite database
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3

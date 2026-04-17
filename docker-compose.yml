@@ -5,12 +5,18 @@ services:
       dockerfile: Dockerfile
       target: development
     container_name: ecommerce-app-dev
+    command: ["sh", "/app/start.sh"]
     ports:
-      - "3000:3000"
-      - "4000:4000"
+      - "${WEB_PORT:-3000}:3000"
+      - "${API_PORT:-4000}:4000"
     environment:
       - NODE_ENV=development
-      - DATABASE_URL=file:/app/apps/api/dev.db
+      - START_MODE=development
+      - DATABASE_URL=file:/data/dev.db
+      - SESSION_SECRET=${SESSION_SECRET:-dev-only-change-me-please}
+      - CLIENT_URL=${CLIENT_URL:-http://localhost:3000}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:4000/api}
+      - RUN_DB_SEED=${RUN_DB_SEED_DEV:-auto}
       - CHOKIDAR_USEPOLLING=true
     volumes:
       - ./apps/api:/app/apps/api
@@ -18,7 +24,7 @@ services:
       - api_node_modules:/app/apps/api/node_modules
       - web_node_modules:/app/apps/web/node_modules
       - root_node_modules:/app/node_modules
-      - sqlite_data:/app/apps/api  # Persist SQLite database
+      - sqlite_data:/data # Persist SQLite database
     restart: unless-stopped
 
 volumes:

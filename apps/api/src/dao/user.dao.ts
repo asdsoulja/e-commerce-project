@@ -10,22 +10,53 @@ type CreateUserInput = {
   role?: UserRole;
 };
 
+const addressOrderBy = {
+  createdAt: "desc"
+} satisfies Prisma.AddressOrderByWithRelationInput;
+
+const userAuthSelect = {
+  id: true,
+  email: true,
+  firstName: true,
+  lastName: true,
+  role: true,
+  passwordHash: true
+} satisfies Prisma.UserSelect;
+
+const userAccountSelect = {
+  id: true,
+  email: true,
+  firstName: true,
+  lastName: true,
+  phone: true,
+  role: true,
+  defaultCardHolder: true,
+  defaultCardLast4: true,
+  defaultCardExpiryMonth: true,
+  defaultCardExpiryYear: true,
+  addresses: {
+    orderBy: addressOrderBy
+  }
+} satisfies Prisma.UserSelect;
+
+const userPaymentProfileSelect = {
+  defaultCardHolder: true,
+  defaultCardLast4: true,
+  defaultCardExpiryMonth: true,
+  defaultCardExpiryYear: true
+} satisfies Prisma.UserSelect;
+
 export async function findUserByEmail(email: string) {
   return prisma.user.findUnique({
-    where: { email }
+    where: { email },
+    select: userAuthSelect
   });
 }
 
 export async function findUserById(id: string) {
   return prisma.user.findUnique({
     where: { id },
-    include: {
-      addresses: {
-        orderBy: {
-          createdAt: "desc"
-        }
-      }
-    }
+    select: userAccountSelect
   });
 }
 
@@ -48,14 +79,7 @@ export async function createUser(input: CreateUserInput) {
 export async function listUsers() {
   return prisma.user.findMany({
     orderBy: { createdAt: "desc" },
-    include: {
-      addresses: {
-        orderBy: {
-          createdAt: "desc"
-        }
-      },
-      orders: true
-    }
+    select: userAccountSelect
   });
 }
 
@@ -63,13 +87,13 @@ export async function updateUser(id: string, data: Prisma.UserUpdateInput) {
   return prisma.user.update({
     where: { id },
     data,
-    include: {
-      addresses: {
-        orderBy: {
-          createdAt: "desc"
-        }
-      },
-      orders: true
-    }
+    select: userAccountSelect
+  });
+}
+
+export async function findUserPaymentProfile(userId: string) {
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: userPaymentProfileSelect
   });
 }

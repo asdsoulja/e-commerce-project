@@ -14,7 +14,7 @@
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
-    "db:push": "prisma db push",
+    "db:push": "bash -c 'touch ./dev.db && prisma db push'",
     "db:migrate": "prisma migrate dev",
     "start:api": "npm run start",
     "db:seed": "tsx prisma/seed.ts",

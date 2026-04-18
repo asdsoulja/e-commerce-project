@@ -85,11 +85,32 @@ function mapDefaultAddress(
   };
 }
 
-function formatUserAccount(
-  user: Awaited<ReturnType<typeof listUsers>>[number]
-) {
+type UserAccountProjection = {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  phone: string | null;
+  defaultCardLast4: string | null;
+  addresses: Array<{
+    label: string | null;
+    street: string;
+    province: string;
+    country: string;
+    zip: string;
+    phone: string | null;
+  }>;
+};
+
+function formatUserAccount(user: UserAccountProjection) {
   return {
-    ...user,
+    id: user.id,
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    role: user.role,
+    phone: user.phone,
     defaultShippingAddress: mapDefaultAddress(user.addresses, DEFAULT_SHIPPING_LABEL),
     defaultBillingAddress: mapDefaultAddress(user.addresses, DEFAULT_BILLING_LABEL),
     paymentProfile: user.defaultCardLast4
@@ -216,7 +237,7 @@ export async function removeInventoryItem(itemId: string) {
 
 export async function getUserAccounts() {
   const users = await listUsers();
-  return users.map(formatUserAccount);
+  return users.map((user) => formatUserAccount(user));
 }
 
 export async function editUserAccount(
@@ -271,10 +292,5 @@ export async function editUserAccount(
     throw new AppError(404, "User not found");
   }
 
-  const withOrders = {
-    ...user,
-    orders: []
-  };
-
-  return formatUserAccount(withOrders);
+  return formatUserAccount(user);
 }

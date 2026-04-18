@@ -8,18 +8,26 @@ const MAX_DEPTH = 6;
 
 const SENSITIVE_KEYS = new Set([
   "password",
-  "newPassword",
-  "confirmPassword",
+  "passwordhash",
+  "newpassword",
+  "confirmpassword",
   "token",
-  "refreshToken",
-  "accessToken",
+  "refreshtoken",
+  "accesstoken",
   "authorization",
   "cookie",
   "session",
   "sessionid",
-  "creditCard",
-  "cardNumber",
-  "cvv"
+  "creditcard",
+  "cardholder",
+  "cardnumber",
+  "cardlast4",
+  "cvv",
+  "paymentprofile",
+  "defaultcardholder",
+  "defaultcardlast4",
+  "defaultcardexpirymonth",
+  "defaultcardexpiryyear"
 ]);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

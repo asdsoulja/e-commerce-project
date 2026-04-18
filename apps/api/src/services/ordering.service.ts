@@ -1,10 +1,10 @@
 import { getCartWithItems } from "../dao/cart.dao.js";
 import {
-  DEFAULT_BILLING_LABEL,
-  DEFAULT_SHIPPING_LABEL
-} from "../dao/address.dao.js";
-import { listOrdersByUser } from "../dao/order.dao.js";
-import { prisma } from "../lib/prisma.js";
+  createApprovedOrder,
+  createPaymentAttempt,
+  listOrdersByUser
+} from "../dao/order.dao.js";
+import { findUserPaymentProfile } from "../dao/user.dao.js";
 import { AppError } from "../utils/app-error.js";
 
 type AddressPayload = {
@@ -70,17 +70,7 @@ async function resolveCardDefaultsForCheckout(
   }
 
   if (payload.useSavedPayment) {
-    const user = await prisma.user.findUnique({
-      where: {
-        id: userId
-      },
-      select: {
-        defaultCardHolder: true,
-        defaultCardLast4: true,
-        defaultCardExpiryMonth: true,
-        defaultCardExpiryYear: true
-      }
-    });
+    const user = await findUserPaymentProfile(userId);
 
     if (
       !user?.defaultCardHolder ||
@@ -118,7 +108,7 @@ export async function checkout(userId: string, payload: CheckoutPayload) {
     }
   }
 
-  const attempt = await prisma.paymentAttempt.create({ data: {} });
+  const attempt = await createPaymentAttempt();
   const approved = attempt.id % 3 !== 0;
 
   if (!approved) {
@@ -133,133 +123,20 @@ export async function checkout(userId: string, payload: CheckoutPayload) {
   const cardDefaults = await resolveCardDefaultsForCheckout(userId, payload);
   const shouldSaveDefaults = payload.saveAsDefault ?? true;
 
-  const result = await prisma.$transaction(async (tx) => {
-    const shippingAddress = await tx.address.create({
-      data: {
-        userId,
-        ...shippingInput,
-        label: payload.shippingAddress.label ?? "shipping"
-      }
-    });
-
-    const billingAddress = await tx.address.create({
-      data: {
-        userId,
-        ...billingInput,
-        label: payload.billingAddress.label ?? "billing"
-      }
-    });
-
-    const total = cart.items.reduce((sum, entry) => sum + entry.quantity * entry.item.price, 0);
-
-    for (const entry of cart.items) {
-      await tx.item.update({
-        where: { id: entry.item.id },
-        data: {
-          quantity: {
-            decrement: entry.quantity
-          }
-        }
-      });
-    }
-
-    const order = await tx.order.create({
-      data: {
-        userId,
-        status: "PAID",
-        paymentStatus: "APPROVED",
-        total,
-        billingAddressId: billingAddress.id,
-        shippingAddressId: shippingAddress.id,
-        items: {
-          create: cart.items.map((entry) => ({
-            itemId: entry.item.id,
-            quantity: entry.quantity,
-            priceAtPurchase: entry.item.price
-          }))
-        }
-      },
-      include: {
-        items: {
-          include: {
-            item: true
-          }
-        },
-        shippingAddress: true,
-        billingAddress: true
-      }
-    });
-
-    if (shouldSaveDefaults) {
-      const existingShippingDefault = await tx.address.findFirst({
-        where: {
-          userId,
-          label: DEFAULT_SHIPPING_LABEL
-        },
-        orderBy: {
-          createdAt: "desc"
-        }
-      });
-
-      if (existingShippingDefault) {
-        await tx.address.update({
-          where: {
-            id: existingShippingDefault.id
-          },
-          data: shippingInput
-        });
-      } else {
-        await tx.address.create({
-          data: {
-            userId,
-            label: DEFAULT_SHIPPING_LABEL,
-            ...shippingInput
-          }
-        });
-      }
-
-      const existingBillingDefault = await tx.address.findFirst({
-        where: {
-          userId,
-          label: DEFAULT_BILLING_LABEL
-        },
-        orderBy: {
-          createdAt: "desc"
-        }
-      });
-
-      if (existingBillingDefault) {
-        await tx.address.update({
-          where: {
-            id: existingBillingDefault.id
-          },
-          data: billingInput
-        });
-      } else {
-        await tx.address.create({
-          data: {
-            userId,
-            label: DEFAULT_BILLING_LABEL,
-            ...billingInput
-          }
-        });
-      }
-
-      await tx.user.update({
-        where: {
-          id: userId
-        },
-        data: cardDefaults
-      });
-    }
-
-    await tx.cartItem.deleteMany({
-      where: {
-        cartId: cart.id
-      }
-    });
-
-    return order;
+  const result = await createApprovedOrder({
+    userId,
+    cartId: cart.id,
+    items: cart.items.map((entry) => ({
+      itemId: entry.item.id,
+      quantity: entry.quantity,
+      unitPrice: entry.item.price
+    })),
+    shippingInput,
+    billingInput,
+    shippingLabel: payload.shippingAddress.label,
+    billingLabel: payload.billingAddress.label,
+    shouldSaveDefaults,
+    cardDefaults
   });
 
   return {

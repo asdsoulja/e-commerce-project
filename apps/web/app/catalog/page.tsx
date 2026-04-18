@@ -28,6 +28,7 @@ function CatalogPageContent() {
   const [model, setModel] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "price">("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [isHydrated, setIsHydrated] = useState(false);
 
   const queryString = searchParams.toString();
 
@@ -55,6 +56,10 @@ function CatalogPageContent() {
 
     router.replace("/catalog", { scroll: false });
   }, [queryString, router]);
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   const filters = useMemo(
     () => ({
@@ -162,7 +167,7 @@ function CatalogPageContent() {
   }, [model, modelOptions]);
 
   const items = catalogQuery.data ?? [];
-  const filtersLoading = filterOptionsQuery.isLoading;
+  const filtersLoading = isHydrated && filterOptionsQuery.isLoading;
   const isAdmin = meRoleQuery.data === "ADMIN";
 
   return (

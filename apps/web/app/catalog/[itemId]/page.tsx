@@ -4,17 +4,10 @@ import Link from "next/link";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
-import { isAxiosError } from "axios";
 import { api, toErrorMessage } from "@/lib/api";
 import { formatCurrency } from "@/lib/format";
 import { Item } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-
-type ApiMeRoleResponse = {
-  user?: {
-    role?: "CUSTOMER" | "ADMIN";
-  };
-};
 
 export default function ProductDetailsPage() {
   const params = useParams<{ itemId: string }>();
@@ -38,23 +31,6 @@ export default function ProductDetailsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cart"] });
     },
-  });
-
-  const meRoleQuery = useQuery({
-    queryKey: ["me-role"],
-    queryFn: async () => {
-      try {
-        const { data } = await api.get<ApiMeRoleResponse>("/identity/me");
-        return data.user?.role ?? null;
-      } catch (error) {
-        if (isAxiosError(error) && error.response?.status === 401) {
-          return null;
-        }
-
-        return null;
-      }
-    },
-    retry: false,
   });
 
   if (itemQuery.isLoading) {
@@ -93,7 +69,6 @@ export default function ProductDetailsPage() {
 
   const isOutOfStock = item.quantity === 0;
   const maxQuantity = Math.max(1, Math.min(item.quantity, 99));
-  const isAdmin = meRoleQuery.data === "ADMIN";
 
   return (
     <main className="space-y-8">
@@ -156,14 +131,12 @@ export default function ProductDetailsPage() {
               <span className="font-semibold text-slate-900">Model:</span>{" "}
               {item.model ?? "N/A"}
             </p>
-            {isAdmin ? (
-              <p>
-                <span className="font-semibold text-slate-900">
-                  Inventory remaining:
-                </span>{" "}
-                {item.quantity}
-              </p>
-            ) : null}
+            <p>
+              <span className="font-semibold text-slate-900">
+                Inventory remaining:
+              </span>{" "}
+              {item.quantity}
+            </p>
             <p>
               <span className="font-semibold text-slate-900">Price:</span>{" "}
               {formatCurrency(item.price)}

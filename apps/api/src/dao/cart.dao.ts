@@ -55,11 +55,3 @@ export async function removeCartItem(cartId: string, itemId: string) {
     }
   });
 }
-
-export async function clearCart(cartId: string) {
-  return prisma.cartItem.deleteMany({
-    where: {
-      cartId
-    }
-  });
-}

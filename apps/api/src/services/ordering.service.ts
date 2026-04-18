@@ -29,6 +29,9 @@ type CheckoutPayload = {
   shippingAddress: AddressPayload;
   creditCard: CreditCardPayload;
   useSavedPayment?: boolean;
+  saveAddressesAsDefault?: boolean;
+  savePaymentAsDefault?: boolean;
+  // Backward compatibility for older clients/scripts.
   saveAsDefault?: boolean;
 };
 
@@ -121,7 +124,10 @@ export async function checkout(userId: string, payload: CheckoutPayload) {
   const shippingInput = sanitizeAddress(payload.shippingAddress);
   const billingInput = sanitizeAddress(payload.billingAddress);
   const cardDefaults = await resolveCardDefaultsForCheckout(userId, payload);
-  const shouldSaveDefaults = payload.saveAsDefault ?? true;
+  const shouldSaveAddressDefaults =
+    payload.saveAddressesAsDefault ?? payload.saveAsDefault ?? true;
+  const shouldSavePaymentDefaults =
+    payload.savePaymentAsDefault ?? payload.saveAsDefault ?? true;
 
   const result = await createApprovedOrder({
     userId,
@@ -135,7 +141,8 @@ export async function checkout(userId: string, payload: CheckoutPayload) {
     billingInput,
     shippingLabel: payload.shippingAddress.label,
     billingLabel: payload.billingAddress.label,
-    shouldSaveDefaults,
+    shouldSaveAddressDefaults,
+    shouldSavePaymentDefaults,
     cardDefaults
   });
 

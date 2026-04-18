@@ -4,7 +4,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useEffect, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { api, toErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,23 @@ const registerSchema = z.object({
 });
 
 type RegisterInput = z.infer<typeof registerSchema>;
+
+function addressesMatch(
+  left?: RegisterInput["shippingAddress"],
+  right?: RegisterInput["billingAddress"]
+) {
+  if (!left || !right) {
+    return false;
+  }
+
+  return (
+    left.street === right.street &&
+    left.province === right.province &&
+    left.country === right.country &&
+    left.zip === right.zip &&
+    left.phone === right.phone
+  );
+}
 
 function AddressFields({
   title,
@@ -115,10 +133,13 @@ function AddressFields({
 export function RegisterForm() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const [billingSameAsShipping, setBillingSameAsShipping] = useState(true);
 
   const {
+    control,
     register,
     handleSubmit,
+    setValue,
     formState: { errors }
   } = useForm<RegisterInput>({
     resolver: zodResolver(registerSchema),
@@ -152,9 +173,49 @@ export function RegisterForm() {
     }
   });
 
+  const shippingAddress = useWatch({
+    control,
+    name: "shippingAddress"
+  });
+  const billingAddress = useWatch({
+    control,
+    name: "billingAddress"
+  });
+
+  useEffect(() => {
+    if (!billingSameAsShipping) {
+      return;
+    }
+
+    if (addressesMatch(shippingAddress, billingAddress)) {
+      return;
+    }
+
+    setValue(
+      "billingAddress",
+      {
+        street: shippingAddress?.street ?? "",
+        province: shippingAddress?.province ?? "",
+        country: shippingAddress?.country ?? "Canada",
+        zip: shippingAddress?.zip ?? "",
+        phone: shippingAddress?.phone ?? ""
+      },
+      { shouldDirty: true }
+    );
+  }, [billingSameAsShipping, billingAddress, setValue, shippingAddress]);
+
   const mutation = useMutation({
     mutationFn: async (input: RegisterInput) => {
-      const { data } = await api.post("/identity/register", input);
+      const payload = billingSameAsShipping
+        ? {
+            ...input,
+            billingAddress: {
+              ...input.shippingAddress
+            }
+          }
+        : input;
+
+      const { data } = await api.post("/identity/register", payload);
       return data;
     },
     onSuccess: async () => {
@@ -231,19 +292,41 @@ export function RegisterForm() {
         <FieldError message={errors.password?.message} />
       </label>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-3">
+        <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
+          <input
+            type="checkbox"
+            checked={billingSameAsShipping}
+            onChange={(event) => setBillingSameAsShipping(event.target.checked)}
+          />
+          Billing address is same as shipping
+        </label>
+      </div>
+
+      <div
+        className={
+          billingSameAsShipping ? "grid gap-4 lg:grid-cols-1" : "grid gap-4 lg:grid-cols-2"
+        }
+      >
         <AddressFields
           title="Default Shipping Address"
           prefix="shippingAddress"
           register={register}
           errors={errors}
         />
-        <AddressFields
-          title="Default Billing Address"
-          prefix="billingAddress"
-          register={register}
-          errors={errors}
-        />
+
+        {billingSameAsShipping ? (
+          <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            Billing address will automatically match your shipping address.
+          </section>
+        ) : (
+          <AddressFields
+            title="Default Billing Address"
+            prefix="billingAddress"
+            register={register}
+            errors={errors}
+          />
+        )}
       </div>
 
       <fieldset className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">

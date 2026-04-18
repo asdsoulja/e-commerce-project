@@ -38,7 +38,8 @@ type CreateApprovedOrderInput = {
   billingInput: CheckoutAddressInput;
   shippingLabel?: string;
   billingLabel?: string;
-  shouldSaveDefaults: boolean;
+  shouldSaveAddressDefaults: boolean;
+  shouldSavePaymentDefaults: boolean;
   cardDefaults: CheckoutCardDefaults;
 };
 
@@ -213,8 +214,10 @@ export async function createApprovedOrder(input: CreateApprovedOrderInput) {
       }
     });
 
-    if (input.shouldSaveDefaults) {
-      await Promise.all([
+    const profileUpdates: Array<Promise<unknown>> = [];
+
+    if (input.shouldSaveAddressDefaults) {
+      profileUpdates.push(
         upsertDefaultAddress(tx, {
           userId: input.userId,
           label: DEFAULT_SHIPPING_LABEL,
@@ -224,14 +227,23 @@ export async function createApprovedOrder(input: CreateApprovedOrderInput) {
           userId: input.userId,
           label: DEFAULT_BILLING_LABEL,
           address: input.billingInput
-        }),
+        })
+      );
+    }
+
+    if (input.shouldSavePaymentDefaults) {
+      profileUpdates.push(
         tx.user.update({
           where: {
             id: input.userId
           },
           data: input.cardDefaults
         })
-      ]);
+      );
+    }
+
+    if (profileUpdates.length > 0) {
+      await Promise.all(profileUpdates);
     }
 
     await tx.cartItem.deleteMany({

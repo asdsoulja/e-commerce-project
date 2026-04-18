@@ -127,6 +127,16 @@ function isAddressFilled(address: AddressForm) {
   );
 }
 
+function addressesMatch(left: AddressForm, right: AddressForm) {
+  return (
+    left.street === right.street &&
+    left.province === right.province &&
+    left.country === right.country &&
+    left.zip === right.zip &&
+    left.phone === right.phone
+  );
+}
+
 function AddressEditor({
   title,
   value,
@@ -188,6 +198,7 @@ function AddressEditor({
 export default function ProfilePage() {
   const queryClient = useQueryClient();
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [billingSameAsShipping, setBillingSameAsShipping] = useState(false);
   const [form, setForm] = useState<ProfileForm>({
     firstName: "",
     lastName: "",
@@ -232,13 +243,18 @@ export default function ProfilePage() {
       return;
     }
 
+    const shippingAddress = mapAddress(user.defaultShippingAddress);
+    const billingAddress = mapAddress(
+      user.defaultBillingAddress ?? user.defaultShippingAddress
+    );
+
     setForm({
       firstName: user.firstName ?? "",
       lastName: user.lastName ?? "",
       email: user.email ?? "",
       phone: user.phone ?? "",
-      shippingAddress: mapAddress(user.defaultShippingAddress),
-      billingAddress: mapAddress(user.defaultBillingAddress ?? user.defaultShippingAddress),
+      shippingAddress,
+      billingAddress,
       payment: {
         cardHolder: user.paymentProfile?.cardHolder ?? "",
         cardNumber: "",
@@ -247,14 +263,39 @@ export default function ProfilePage() {
         cvv: ""
       }
     });
+    setBillingSameAsShipping(addressesMatch(shippingAddress, billingAddress));
   }, [meQuery.data]);
+
+  useEffect(() => {
+    if (!billingSameAsShipping) {
+      return;
+    }
+
+    setForm((prev) => {
+      if (addressesMatch(prev.billingAddress, prev.shippingAddress)) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        billingAddress: {
+          ...prev.shippingAddress
+        }
+      };
+    });
+  }, [billingSameAsShipping, form.shippingAddress]);
 
   const updateMutation = useMutation({
     mutationFn: async () => {
       const shippingAddress = form.shippingAddress;
-      const billingAddress = form.billingAddress;
+      const billingAddress = billingSameAsShipping
+        ? shippingAddress
+        : form.billingAddress;
 
-      if (!isAddressFilled(shippingAddress) || !isAddressFilled(billingAddress)) {
+      if (
+        !isAddressFilled(shippingAddress) ||
+        (!billingSameAsShipping && !isAddressFilled(billingAddress))
+      ) {
         throw new Error("Shipping and billing defaults must be complete.");
       }
 
@@ -422,7 +463,20 @@ export default function ProfilePage() {
                 />
               </div>
 
-              <div className="grid gap-4 lg:grid-cols-2">
+              <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={billingSameAsShipping}
+                  onChange={(event) => setBillingSameAsShipping(event.target.checked)}
+                />
+                Billing address is same as shipping
+              </label>
+
+              <div
+                className={
+                  billingSameAsShipping ? "grid gap-4" : "grid gap-4 lg:grid-cols-2"
+                }
+              >
                 <AddressEditor
                   title="Default Shipping Address"
                   value={form.shippingAddress}
@@ -436,19 +490,25 @@ export default function ProfilePage() {
                     }))
                   }
                 />
-                <AddressEditor
-                  title="Default Billing Address"
-                  value={form.billingAddress}
-                  onChange={(field, nextValue) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      billingAddress: {
-                        ...prev.billingAddress,
-                        [field]: nextValue
-                      }
-                    }))
-                  }
-                />
+                {billingSameAsShipping ? (
+                  <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                    Billing address will automatically mirror your shipping address when you save.
+                  </section>
+                ) : (
+                  <AddressEditor
+                    title="Default Billing Address"
+                    value={form.billingAddress}
+                    onChange={(field, nextValue) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        billingAddress: {
+                          ...prev.billingAddress,
+                          [field]: nextValue
+                        }
+                      }))
+                    }
+                  />
+                )}
               </div>
 
               <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">

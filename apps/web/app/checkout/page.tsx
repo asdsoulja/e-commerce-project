@@ -72,7 +72,8 @@ type ApiCheckoutPayload = {
   billingAddress: ApiAddress;
   creditCard: PaymentForm;
   useSavedPayment: boolean;
-  saveAsDefault: boolean;
+  saveAddressesAsDefault: boolean;
+  savePaymentAsDefault: boolean;
 };
 
 type ApiCheckoutResponse = {
@@ -222,6 +223,34 @@ function AddressFields({
   );
 }
 
+function AddressSummary({
+  title,
+  address
+}: {
+  title: string;
+  address: AddressForm;
+}) {
+  const hasAddress = isAddressFilled(address);
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+      {hasAddress ? (
+        <div className="mt-3 space-y-1 text-sm text-slate-600">
+          <p>{address.street}</p>
+          <p>
+            {address.province}, {address.country}
+          </p>
+          <p>{address.zip}</p>
+          {address.phone ? <p>{address.phone}</p> : null}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-slate-600">No saved address found for this section.</p>
+      )}
+    </section>
+  );
+}
+
 export default function CheckoutPage() {
   const queryClient = useQueryClient();
 
@@ -237,9 +266,10 @@ export default function CheckoutPage() {
   });
 
   const [billingSameAsShipping, setBillingSameAsShipping] = useState(true);
-  const [useSavedAddresses, setUseSavedAddresses] = useState(true);
-  const [useSavedPayment, setUseSavedPayment] = useState(true);
-  const [saveAsDefault, setSaveAsDefault] = useState(true);
+  const [useSavedAddresses, setUseSavedAddresses] = useState(false);
+  const [useSavedPayment, setUseSavedPayment] = useState(false);
+  const [saveAddressesAsDefault, setSaveAddressesAsDefault] = useState(true);
+  const [savePaymentAsDefault, setSavePaymentAsDefault] = useState(true);
 
   const meQuery = useQuery({
     queryKey: ["me"],
@@ -271,18 +301,26 @@ export default function CheckoutPage() {
     meQuery.data?.defaultShippingAddress || meQuery.data?.defaultBillingAddress
   );
   const hasSavedPaymentProfile = Boolean(meQuery.data?.paymentProfile?.cardLast4);
+  const savedShippingAddress = mapApiAddressToForm(meQuery.data?.defaultShippingAddress);
+  const savedBillingAddress = mapApiAddressToForm(
+    meQuery.data?.defaultBillingAddress ?? meQuery.data?.defaultShippingAddress
+  );
+  const usingSavedAddressesForCheckout = isLoggedIn && hasSavedAddresses && useSavedAddresses;
+  const usingSavedPaymentForCheckout =
+    isLoggedIn &&
+    hasSavedPaymentProfile &&
+    useSavedPayment &&
+    form.payment.cardNumber.trim().length === 0;
 
   useEffect(() => {
-    if (!hasSavedAddresses && useSavedAddresses) {
-      setUseSavedAddresses(false);
-    }
-  }, [hasSavedAddresses, useSavedAddresses]);
+    // Default to "use saved" whenever saved addresses are available.
+    setUseSavedAddresses(hasSavedAddresses);
+  }, [hasSavedAddresses]);
 
   useEffect(() => {
-    if (!hasSavedPaymentProfile && useSavedPayment) {
-      setUseSavedPayment(false);
-    }
-  }, [hasSavedPaymentProfile, useSavedPayment]);
+    // Default to "use saved" whenever a saved payment profile is available.
+    setUseSavedPayment(hasSavedPaymentProfile);
+  }, [hasSavedPaymentProfile]);
 
   useEffect(() => {
     if (!isLoggedIn || !useSavedAddresses) {
@@ -374,13 +412,19 @@ export default function CheckoutPage() {
 
   const checkoutMutation = useMutation({
     mutationFn: async () => {
-      const shippingAddress = sanitizeAddress(form.shippingAddress);
-      const billingAddress = billingSameAsShipping
-        ? shippingAddress
-        : sanitizeAddress(form.billingAddress);
+      const usingSavedAddresses = usingSavedAddressesForCheckout;
+      const shippingAddress = usingSavedAddresses
+        ? sanitizeAddress(savedShippingAddress)
+        : sanitizeAddress(form.shippingAddress);
+      const billingAddress = usingSavedAddresses
+        ? sanitizeAddress(savedBillingAddress)
+        : billingSameAsShipping
+          ? shippingAddress
+          : sanitizeAddress(form.billingAddress);
 
-      const shouldUseSavedPayment =
-        useSavedPayment && hasSavedPaymentProfile && form.payment.cardNumber.trim().length === 0;
+      const shouldUseSavedPayment = usingSavedPaymentForCheckout;
+      const shouldSaveAddressesAsDefault = saveAddressesAsDefault && !usingSavedAddresses;
+      const shouldSavePaymentAsDefault = savePaymentAsDefault && !shouldUseSavedPayment;
 
       const payload: ApiCheckoutPayload = {
         shippingAddress,
@@ -393,7 +437,8 @@ export default function CheckoutPage() {
           cvv: form.payment.cvv.trim()
         },
         useSavedPayment: shouldUseSavedPayment,
-        saveAsDefault
+        saveAddressesAsDefault: shouldSaveAddressesAsDefault,
+        savePaymentAsDefault: shouldSavePaymentAsDefault
       };
 
       const { data } = await api.post<ApiCheckoutResponse>("/orders/checkout", payload);
@@ -538,12 +583,25 @@ export default function CheckoutPage() {
       return true;
     }
 
-    if (!isAddressFilled(form.shippingAddress)) {
-      return true;
+    const usingSavedAddresses = hasSavedAddresses && useSavedAddresses;
+    if (usingSavedAddresses) {
+      if (!isAddressFilled(savedShippingAddress) || !isAddressFilled(savedBillingAddress)) {
+        return true;
+      }
+    } else {
+      if (!isAddressFilled(form.shippingAddress)) {
+        return true;
+      }
+
+      if (!billingSameAsShipping && !isAddressFilled(form.billingAddress)) {
+        return true;
+      }
     }
 
-    if (!billingSameAsShipping && !isAddressFilled(form.billingAddress)) {
-      return true;
+    const usingSavedPaymentProfile =
+      useSavedPayment && hasSavedPaymentProfile && !form.payment.cardNumber.trim();
+    if (usingSavedPaymentProfile) {
+      return false;
     }
 
     if (!form.payment.cardHolder.trim()) {
@@ -559,10 +617,6 @@ export default function CheckoutPage() {
       return true;
     }
 
-    if (useSavedPayment && hasSavedPaymentProfile && !form.payment.cardNumber.trim()) {
-      return false;
-    }
-
     return form.payment.cardNumber.replace(/\D/g, "").length < 12;
   }, [
     billingSameAsShipping,
@@ -571,8 +625,12 @@ export default function CheckoutPage() {
     form.payment,
     form.shippingAddress,
     hasSavedPaymentProfile,
+    hasSavedAddresses,
     isLoggedIn,
+    savedBillingAddress,
+    savedShippingAddress,
     totalItems,
+    useSavedAddresses,
     useSavedPayment
   ]);
 
@@ -724,49 +782,7 @@ export default function CheckoutPage() {
           </div>
         </section>
       ) : (
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-2xl font-semibold text-slate-900">Checkout Defaults</h2>
-
-          <div className="mt-5 grid gap-3">
-            <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
-              <input
-                type="checkbox"
-                checked={useSavedAddresses}
-                onChange={(event) => setUseSavedAddresses(event.target.checked)}
-                disabled={!hasSavedAddresses}
-              />
-              Use saved shipping and billing addresses
-            </label>
-
-            <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
-              <input
-                type="checkbox"
-                checked={useSavedPayment}
-                onChange={(event) => setUseSavedPayment(event.target.checked)}
-                disabled={!hasSavedPaymentProfile}
-              />
-              Use saved payment profile
-              {hasSavedPaymentProfile ? (
-                <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">
-                  **** {meQuery.data?.paymentProfile?.cardLast4}
-                </span>
-              ) : (
-                <span className="rounded-full bg-amber-100 px-2 py-1 text-xs text-amber-700">
-                  No saved card
-                </span>
-              )}
-            </label>
-
-            <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
-              <input
-                type="checkbox"
-                checked={saveAsDefault}
-                onChange={(event) => setSaveAsDefault(event.target.checked)}
-              />
-              Save these checkout details as my defaults
-            </label>
-          </div>
-        </section>
+        null
       )}
 
       {meQuery.error ? (
@@ -781,97 +797,170 @@ export default function CheckoutPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-8 lg:grid-cols-2">
-        <AddressFields
-          title="Shipping Address"
-          value={form.shippingAddress}
-          onChange={updateShipping}
-        />
-
-        <div className="space-y-4">
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-2xl font-semibold text-slate-900">Billing Address</h2>
-              <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={billingSameAsShipping}
-                  onChange={(event) => setBillingSameAsShipping(event.target.checked)}
-                />
-                Same as shipping
-              </label>
-            </div>
-          </section>
-
-          {billingSameAsShipping ? (
-            <section className="rounded-3xl border border-slate-200 bg-slate-50 p-6 shadow-sm">
-              <p className="text-sm text-slate-600">
-                Billing address will match shipping address.
-              </p>
-            </section>
-          ) : (
-            <AddressFields
-              title="Billing Address Details"
-              value={form.billingAddress}
-              onChange={updateBilling}
-            />
-          )}
-        </div>
-      </div>
-
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-2xl font-semibold text-slate-900">Payment Information</h2>
-
-        <div className="mt-5 grid gap-4">
-          <input
-            type="text"
-            placeholder="Name on card"
-            value={form.payment.cardHolder}
-            onChange={(event) => updatePayment("cardHolder", event.target.value)}
-            className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-500"
-          />
-          <input
-            type="text"
-            placeholder={
-              useSavedPayment && hasSavedPaymentProfile
-                ? "Card number (optional when using saved profile)"
-                : "Card number"
-            }
-            value={form.payment.cardNumber}
-            onChange={(event) => updatePayment("cardNumber", event.target.value)}
-            className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-500"
-          />
-          <div className="grid gap-4 md:grid-cols-3">
-            <input
-              type="text"
-              placeholder="MM"
-              value={form.payment.expiryMonth}
-              onChange={(event) => updatePayment("expiryMonth", event.target.value)}
-              className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-500"
-            />
-            <input
-              type="text"
-              placeholder="YYYY"
-              value={form.payment.expiryYear}
-              onChange={(event) => updatePayment("expiryYear", event.target.value)}
-              className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-500"
-            />
-            <input
-              type="text"
-              placeholder="CVV"
-              value={form.payment.cvv}
-              onChange={(event) => updatePayment("cvv", event.target.value)}
-              className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-500"
-            />
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-2xl font-semibold text-slate-900">Shipping and Billing</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Choose saved addresses or enter new ones for this checkout.
+            </p>
           </div>
 
-          {useSavedPayment && hasSavedPaymentProfile ? (
-            <p className="text-xs text-slate-500">
-              Saved profile selected. Leave card number empty to reuse ****{" "}
-              {meQuery.data?.paymentProfile?.cardLast4}.
-            </p>
+          {isLoggedIn && hasSavedAddresses ? (
+            <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
+              <input
+                type="checkbox"
+                checked={useSavedAddresses}
+                onChange={(event) => setUseSavedAddresses(event.target.checked)}
+              />
+              Use saved shipping and billing addresses
+            </label>
           ) : null}
         </div>
+
+        {!usingSavedAddressesForCheckout ? (
+          <label className="mt-5 flex items-center gap-3 text-sm font-medium text-slate-700">
+            <input
+              type="checkbox"
+              checked={saveAddressesAsDefault}
+              onChange={(event) => setSaveAddressesAsDefault(event.target.checked)}
+            />
+            Save shipping and billing addresses to my profile
+          </label>
+        ) : null}
+
+        {usingSavedAddressesForCheckout ? (
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            <AddressSummary title="Saved Shipping Address" address={savedShippingAddress} />
+            <AddressSummary title="Saved Billing Address" address={savedBillingAddress} />
+          </div>
+        ) : (
+          <div className="mt-6 grid gap-8 lg:grid-cols-2">
+            <AddressFields
+              title="Shipping Address"
+              value={form.shippingAddress}
+              onChange={updateShipping}
+            />
+
+            <div className="space-y-4">
+              <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-2xl font-semibold text-slate-900">Billing Address</h2>
+                  <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={billingSameAsShipping}
+                      onChange={(event) => setBillingSameAsShipping(event.target.checked)}
+                    />
+                    Same as shipping
+                  </label>
+                </div>
+              </section>
+
+              {billingSameAsShipping ? (
+                <section className="rounded-3xl border border-slate-200 bg-slate-50 p-6 shadow-sm">
+                  <p className="text-sm text-slate-600">
+                    Billing address will match shipping address.
+                  </p>
+                </section>
+              ) : (
+                <AddressFields
+                  title="Billing Address Details"
+                  value={form.billingAddress}
+                  onChange={updateBilling}
+                />
+              )}
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-2xl font-semibold text-slate-900">Payment Information</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Use a saved profile or enter a card for this order.
+            </p>
+          </div>
+
+          {isLoggedIn && hasSavedPaymentProfile ? (
+            <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
+              <input
+                type="checkbox"
+                checked={useSavedPayment}
+                onChange={(event) => setUseSavedPayment(event.target.checked)}
+              />
+              Use saved payment profile
+              <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">
+                **** {meQuery.data?.paymentProfile?.cardLast4}
+              </span>
+            </label>
+          ) : null}
+        </div>
+
+        {!usingSavedPaymentForCheckout ? (
+          <label className="mt-5 flex items-center gap-3 text-sm font-medium text-slate-700">
+            <input
+              type="checkbox"
+              checked={savePaymentAsDefault}
+              onChange={(event) => setSavePaymentAsDefault(event.target.checked)}
+            />
+            Save payment profile to my account
+          </label>
+        ) : null}
+
+        {usingSavedPaymentForCheckout ? (
+          <section className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm text-slate-700">
+              Using saved payment profile ending in{" "}
+              <span className="font-semibold">**** {meQuery.data?.paymentProfile?.cardLast4}</span>.
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Uncheck "Use saved payment profile" if you want to enter a different card.
+            </p>
+          </section>
+        ) : (
+          <div className="mt-5 grid gap-4">
+            <input
+              type="text"
+              placeholder="Name on card"
+              value={form.payment.cardHolder}
+              onChange={(event) => updatePayment("cardHolder", event.target.value)}
+              className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-500"
+            />
+            <input
+              type="text"
+              placeholder="Card number"
+              value={form.payment.cardNumber}
+              onChange={(event) => updatePayment("cardNumber", event.target.value)}
+              className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-500"
+            />
+            <div className="grid gap-4 md:grid-cols-3">
+              <input
+                type="text"
+                placeholder="MM"
+                value={form.payment.expiryMonth}
+                onChange={(event) => updatePayment("expiryMonth", event.target.value)}
+                className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-500"
+              />
+              <input
+                type="text"
+                placeholder="YYYY"
+                value={form.payment.expiryYear}
+                onChange={(event) => updatePayment("expiryYear", event.target.value)}
+                className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-500"
+              />
+              <input
+                type="text"
+                placeholder="CVV"
+                value={form.payment.cvv}
+                onChange={(event) => updatePayment("cvv", event.target.value)}
+                className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-500"
+              />
+            </div>
+          </div>
+        )}
       </section>
 
       {checkoutMutation.error ? (

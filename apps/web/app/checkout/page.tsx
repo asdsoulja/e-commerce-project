@@ -1128,7 +1128,7 @@ export default function CheckoutPage() {
             </Link>
             <Link
               href="/profile"
-              className="rounded-full border border-slate-900 bg-slate-900 px-5 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+              className="rounded-full border border-slate-900 bg-slate-900 px-5 py-2 text-sm font-semibold !text-white transition hover:bg-slate-800 hover:!text-white visited:!text-white"
             >
               View Purchase History
             </Link>

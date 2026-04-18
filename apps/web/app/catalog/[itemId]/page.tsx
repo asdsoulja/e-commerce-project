@@ -167,6 +167,7 @@ export default function ProductDetailsPage() {
             <Button
               onClick={() => addMutation.mutate()}
               disabled={addMutation.isPending || isOutOfStock}
+              className="rounded-full border-slate-900 bg-gradient-to-r from-slate-900 to-slate-700 px-5 text-white shadow-sm transition hover:from-slate-800 hover:to-slate-700 disabled:hover:from-slate-900 disabled:hover:to-slate-700"
             >
               {isOutOfStock ? "Out of stock" : "Add to cart"}
             </Button>

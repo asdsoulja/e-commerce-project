@@ -3,9 +3,27 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 API_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
-BASE_URL="${API_BASE_URL:-http://localhost:4000/api}"
+TEST_API_PORT="${TEST_API_PORT:-4010}"
+BASE_URL="${API_BASE_URL:-http://localhost:${TEST_API_PORT}/api}"
 AUTO_START_API="${AUTO_START_API:-1}"
 SKIP_DB_SETUP="${SKIP_DB_SETUP:-0}"
+
+API_PORT="$(python3 - "${BASE_URL}" <<'PY'
+import sys
+from urllib.parse import urlparse
+
+url = urlparse(sys.argv[1])
+if not url.scheme or not url.hostname:
+    raise SystemExit("Invalid API_BASE_URL. Expected format: http(s)://host[:port]/api")
+
+if url.port is not None:
+    print(url.port)
+elif url.scheme == "https":
+    print(443)
+else:
+    print(80)
+PY
+)"
 
 COOKIE_JAR="$(mktemp "${TMPDIR:-/tmp}/estore-curl-cookie.XXXXXX")"
 RESPONSE_FILE="$(mktemp "${TMPDIR:-/tmp}/estore-curl-body.XXXXXX")"
@@ -88,7 +106,7 @@ start_api_if_needed() {
   log "Starting API because ${BASE_URL}/health is not reachable"
   (
     cd "${API_DIR}"
-    npm run dev >"${API_LOG_FILE}" 2>&1
+    PORT="${API_PORT}" npm run dev >"${API_LOG_FILE}" 2>&1
   ) &
   API_PID="$!"
 
@@ -195,10 +213,42 @@ if actual_email != expected_email.strip().lower():
     raise SystemExit(f'Expected authenticated email {expected_email}, got {actual_email!r}')
 PY
 
+log "Verifying guest cart merged after registration"
+api_request "GET" "/cart"
+assert_status "200" "Merged cart lookup after registration"
+python3 - "${RESPONSE_FILE}" "${ITEM_ID}" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], 'r', encoding='utf-8') as fh:
+    data = json.load(fh)
+target_item_id = sys.argv[2]
+items = (((data.get('cart') or {}).get('items')) or [])
+matching = [entry for entry in items if entry.get('itemId') == target_item_id]
+if not matching:
+    raise SystemExit(f'Expected merged cart to include item {target_item_id}.')
+if int(matching[0].get('quantity') or 0) < 1:
+    raise SystemExit('Merged cart item quantity must be at least 1.')
+PY
+
 log "Updating customer profile defaults"
 PROFILE_PATCH_PAYLOAD='{"phone":"4165551001","shippingAddress":{"street":"101 Curl Street","province":"Ontario","country":"Canada","zip":"M1M1M1","phone":"4165551001"},"billingAddress":{"street":"101 Curl Street","province":"Ontario","country":"Canada","zip":"M1M1M1","phone":"4165551001"}}'
 api_request "PATCH" "/identity/me" "${PROFILE_PATCH_PAYLOAD}"
 assert_status "200" "Profile update"
+
+log "Verifying updated profile values"
+api_request "GET" "/identity/me"
+assert_status "200" "Identity me after profile update"
+python3 - "${RESPONSE_FILE}" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], 'r', encoding='utf-8') as fh:
+    data = json.load(fh)
+phone = (((data.get('user') or {}).get('phone')) or '').strip()
+if phone != '4165551001':
+    raise SystemExit(f"Expected updated phone '4165551001', got {phone!r}")
+PY
 
 log "Running checkout using saved payment profile"
 CHECKOUT_PAYLOAD='{"shippingAddress":{"street":"101 Curl Street","province":"Ontario","country":"Canada","zip":"M1M1M1","phone":"4165551001"},"billingAddress":{"street":"101 Curl Street","province":"Ontario","country":"Canada","zip":"M1M1M1","phone":"4165551001"},"creditCard":{"cardHolder":"Curl Tester","expiryMonth":"12","expiryYear":"2030","cvv":"123"},"useSavedPayment":true,"saveAsDefault":true}'

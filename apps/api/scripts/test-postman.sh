@@ -5,9 +5,27 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 API_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 COLLECTION_FILE="${API_DIR}/tests/postman/eecs-estore-api.postman_collection.json"
 ENV_FILE="${API_DIR}/tests/postman/local.postman_environment.json"
-BASE_URL="${API_BASE_URL:-http://localhost:4000/api}"
+TEST_API_PORT="${TEST_API_PORT:-4010}"
+BASE_URL="${API_BASE_URL:-http://localhost:${TEST_API_PORT}/api}"
 AUTO_START_API="${AUTO_START_API:-1}"
 SKIP_DB_SETUP="${SKIP_DB_SETUP:-0}"
+
+API_PORT="$(python3 - "${BASE_URL}" <<'PY'
+import sys
+from urllib.parse import urlparse
+
+url = urlparse(sys.argv[1])
+if not url.scheme or not url.hostname:
+    raise SystemExit("Invalid API_BASE_URL. Expected format: http(s)://host[:port]/api")
+
+if url.port is not None:
+    print(url.port)
+elif url.scheme == "https":
+    print(443)
+else:
+    print(80)
+PY
+)"
 
 API_LOG_FILE="$(mktemp "${TMPDIR:-/tmp}/estore-postman-api-log.XXXXXX")"
 API_PID=""
@@ -61,7 +79,7 @@ start_api_if_needed() {
   log "Starting API because ${BASE_URL}/health is not reachable"
   (
     cd "${API_DIR}"
-    npm run dev >"${API_LOG_FILE}" 2>&1
+    PORT="${API_PORT}" npm run dev >"${API_LOG_FILE}" 2>&1
   ) &
   API_PID="$!"
 

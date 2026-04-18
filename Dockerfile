@@ -37,12 +37,11 @@ RUN npm ci --include=dev
 
 COPY . .
 
-RUN npm run build
-
 WORKDIR /app/apps/api
 RUN npx prisma generate
 
 WORKDIR /app
+RUN npm run build
 
 RUN chmod +x /app/start.sh
 

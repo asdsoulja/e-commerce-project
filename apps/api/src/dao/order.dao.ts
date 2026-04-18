@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { DEFAULT_BILLING_LABEL, DEFAULT_SHIPPING_LABEL } from "./address.dao.js";
 import { prisma } from "../lib/prisma.js";
+import { AppError } from "../utils/app-error.js";
 
 export type SalesHistoryFilter = {
   customerEmail?: string;
@@ -26,6 +27,7 @@ export type CheckoutCardDefaults = {
 
 export type CheckoutCartItemInput = {
   itemId: string;
+  itemName: string;
   quantity: number;
   unitPrice: number;
 };
@@ -175,9 +177,12 @@ export async function createApprovedOrder(input: CreateApprovedOrderInput) {
     const total = input.items.reduce((sum, entry) => sum + entry.quantity * entry.unitPrice, 0);
 
     for (const entry of input.items) {
-      await tx.item.update({
+      const itemUpdateResult = await tx.item.updateMany({
         where: {
-          id: entry.itemId
+          id: entry.itemId,
+          quantity: {
+            gte: entry.quantity
+          }
         },
         data: {
           quantity: {
@@ -185,6 +190,13 @@ export async function createApprovedOrder(input: CreateApprovedOrderInput) {
           }
         }
       });
+
+      if (itemUpdateResult.count !== 1) {
+        throw new AppError(
+          400,
+          `Inventory shortage for ${entry.itemName}. Reduce quantity and try checkout again.`
+        );
+      }
     }
 
     const order = await tx.order.create({

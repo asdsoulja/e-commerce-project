@@ -76,9 +76,29 @@ type ApiCheckoutPayload = {
   savePaymentAsDefault: boolean;
 };
 
+type ApiCheckoutOrderItem = {
+  quantity: number;
+  priceAtPurchase: number;
+  item?: {
+    name?: string | null;
+  } | null;
+};
+
+type ApiCheckoutOrder = {
+  id: string;
+  placedAt?: string;
+  total: number;
+  status: string;
+  paymentStatus: string;
+  items: ApiCheckoutOrderItem[];
+  shippingAddress: ApiAddress;
+  billingAddress: ApiAddress;
+};
+
 type ApiCheckoutResponse = {
   approved: boolean;
   message: string;
+  order?: ApiCheckoutOrder;
 };
 
 type AuthMode = "login" | "register";
@@ -154,6 +174,22 @@ function isCardReadyForRegister(payment: PaymentForm) {
       /^\d{4}$/.test(payment.expiryYear.trim()) &&
       /^\d{3,4}$/.test(payment.cvv.trim())
   );
+}
+
+function formatOrderDate(value?: string) {
+  if (!value) {
+    return "Unknown";
+  }
+
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-CA", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(parsedDate);
 }
 
 function AddressFields({
@@ -634,6 +670,9 @@ export default function CheckoutPage() {
     useSavedPayment
   ]);
 
+  const approvedOrder = checkoutMutation.data?.approved ? checkoutMutation.data.order : null;
+  const hasCompletedCheckout = Boolean(checkoutMutation.data?.approved);
+
   return (
     <main className="space-y-8">
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -969,71 +1008,189 @@ export default function CheckoutPage() {
         </div>
       ) : null}
 
-      {checkoutMutation.data ? (
+      {checkoutMutation.data && !checkoutMutation.data.approved ? (
         <div
-          className={
-            checkoutMutation.data.approved
-              ? "rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
-              : "rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-          }
+          className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
         >
           {checkoutMutation.data.message}
         </div>
       ) : null}
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-slate-900">Ready to place your order?</h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Submit checkout and let the backend validate payment and inventory.
-            </p>
-            {!isLoggedIn ? (
-              <p className="mt-2 text-sm font-medium text-amber-700">
-                Sign in or register above to confirm this order.
-              </p>
-            ) : null}
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 lg:min-w-[220px]">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-              Total amount
-            </p>
-            {cartSummaryQuery.isLoading ? (
-              <p className="mt-2 text-sm text-slate-600">Loading total...</p>
-            ) : (
-              <>
-                <p className="mt-1 text-3xl font-bold tracking-tight text-slate-900">
-                  {formatCurrency(totalAmount)}
-                </p>
-                <p className="text-xs text-slate-500">
-                  {totalItems} item{totalItems === 1 ? "" : "s"} in cart
-                </p>
-              </>
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              if (!isLoggedIn) {
-                return;
-              }
-              checkoutMutation.mutate();
-            }}
-            disabled={checkoutDisabled}
-            className="rounded-full border border-slate-900 px-6 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {!isLoggedIn
-              ? "Sign in to Confirm Order"
-              : checkoutMutation.isPending
-                ? "Processing..."
-                : totalItems === 0
-                  ? "Cart is Empty"
-                  : "Confirm Order"}
-          </button>
+      {checkoutMutation.data?.approved && !approvedOrder ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          {checkoutMutation.data.message}
         </div>
-      </section>
+      ) : null}
+
+      {approvedOrder ? (
+        <section className="rounded-3xl border border-emerald-200 bg-emerald-50/60 p-6 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-700">
+            Order Approved
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold text-slate-900">
+            Thank you, your order is confirmed.
+          </h2>
+          <p className="mt-2 text-sm text-slate-700">
+            Order ID: <span className="font-semibold">{approvedOrder.id}</span>
+          </p>
+          <p className="mt-1 text-sm text-slate-600">
+            Placed on {formatOrderDate(approvedOrder.placedAt)}
+          </p>
+
+          <div className="mt-6 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+            <section className="rounded-2xl border border-slate-200 bg-white p-4">
+              <h3 className="text-lg font-semibold text-slate-900">Items</h3>
+              <div className="mt-4 space-y-3">
+                {approvedOrder.items.length > 0 ? (
+                  approvedOrder.items.map((entry, index) => {
+                    const itemName = entry.item?.name?.trim() || `Item ${index + 1}`;
+                    const lineTotal = entry.quantity * entry.priceAtPurchase;
+
+                    return (
+                      <div
+                        key={`${itemName}-${index}`}
+                        className="flex items-start justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-slate-800">{itemName}</p>
+                          <p className="text-xs text-slate-500">Qty {entry.quantity}</p>
+                        </div>
+                        <p className="text-sm font-semibold text-slate-900">
+                          {formatCurrency(lineTotal)}
+                        </p>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-sm text-slate-600">No line items were returned.</p>
+                )}
+              </div>
+
+              <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-3">
+                <p className="text-sm font-semibold text-slate-700">Order total</p>
+                <p className="text-lg font-bold text-slate-900">
+                  {formatCurrency(approvedOrder.total)}
+                </p>
+              </div>
+            </section>
+
+            <div className="space-y-4">
+              <section className="rounded-2xl border border-slate-200 bg-white p-4">
+                <h3 className="text-base font-semibold text-slate-900">Shipping Address</h3>
+                <div className="mt-2 space-y-1 text-sm text-slate-600">
+                  <p>{approvedOrder.shippingAddress.street}</p>
+                  <p>
+                    {approvedOrder.shippingAddress.province}, {approvedOrder.shippingAddress.country}
+                  </p>
+                  <p>{approvedOrder.shippingAddress.zip}</p>
+                  {approvedOrder.shippingAddress.phone ? (
+                    <p>{approvedOrder.shippingAddress.phone}</p>
+                  ) : null}
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-slate-200 bg-white p-4">
+                <h3 className="text-base font-semibold text-slate-900">Billing Address</h3>
+                <div className="mt-2 space-y-1 text-sm text-slate-600">
+                  <p>{approvedOrder.billingAddress.street}</p>
+                  <p>
+                    {approvedOrder.billingAddress.province}, {approvedOrder.billingAddress.country}
+                  </p>
+                  <p>{approvedOrder.billingAddress.zip}</p>
+                  {approvedOrder.billingAddress.phone ? (
+                    <p>{approvedOrder.billingAddress.phone}</p>
+                  ) : null}
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-slate-200 bg-white p-4">
+                <h3 className="text-base font-semibold text-slate-900">Payment</h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  Status:{" "}
+                  <span className="font-semibold text-slate-800">
+                    {approvedOrder.paymentStatus}
+                  </span>
+                </p>
+                <p className="mt-1 text-sm text-slate-600">
+                  Order status:{" "}
+                  <span className="font-semibold text-slate-800">{approvedOrder.status}</span>
+                </p>
+              </section>
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link
+              href="/catalog"
+              className="rounded-full border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+            >
+              Continue Shopping
+            </Link>
+            <Link
+              href="/profile"
+              className="rounded-full border border-slate-900 bg-slate-900 px-5 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+            >
+              View Purchase History
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
+      {!hasCompletedCheckout ? (
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-slate-900">Ready to place your order?</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Submit checkout and let the backend validate payment and inventory.
+              </p>
+              {!isLoggedIn ? (
+                <p className="mt-2 text-sm font-medium text-amber-700">
+                  Sign in or register above to confirm this order.
+                </p>
+              ) : null}
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 lg:min-w-[220px]">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                Total amount
+              </p>
+              {cartSummaryQuery.isLoading ? (
+                <p className="mt-2 text-sm text-slate-600">Loading total...</p>
+              ) : (
+                <>
+                  <p className="mt-1 text-3xl font-bold tracking-tight text-slate-900">
+                    {formatCurrency(totalAmount)}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {totalItems} item{totalItems === 1 ? "" : "s"} in cart
+                  </p>
+                </>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (!isLoggedIn) {
+                  return;
+                }
+                checkoutMutation.mutate();
+              }}
+              disabled={checkoutDisabled}
+              className="rounded-full border border-slate-900 px-6 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {!isLoggedIn
+                ? "Sign in to Confirm Order"
+                : checkoutMutation.isPending
+                  ? "Processing..."
+                  : totalItems === 0
+                    ? "Cart is Empty"
+                    : "Confirm Order"}
+            </button>
+          </div>
+        </section>
+      ) : null}
     </main>
   );
 }

@@ -102,15 +102,6 @@ export async function checkout(userId: string, payload: CheckoutPayload) {
     throw new AppError(400, "Shopping cart is empty");
   }
 
-  for (const cartEntry of cart.items) {
-    if (cartEntry.quantity > cartEntry.item.quantity) {
-      throw new AppError(
-        400,
-        `Inventory shortage for ${cartEntry.item.name}. Reduce quantity and try checkout again.`
-      );
-    }
-  }
-
   const attempt = await createPaymentAttempt();
   const approved = attempt.id % 3 !== 0;
 
@@ -134,6 +125,7 @@ export async function checkout(userId: string, payload: CheckoutPayload) {
     cartId: cart.id,
     items: cart.items.map((entry) => ({
       itemId: entry.item.id,
+      itemName: entry.item.name,
       quantity: entry.quantity,
       unitPrice: entry.item.price
     })),
